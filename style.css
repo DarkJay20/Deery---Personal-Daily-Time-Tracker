@@ -1,0 +1,141 @@
+/* Custom Font: Roboto for a clean, modern UI look */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
+
+html, body {
+    font-family: 'Roboto', sans-serif;
+    scroll-behavior: smooth;
+    /* Prevent pull-to-refresh on mobile interfering with the app feel */
+    overscroll-behavior-y: contain; 
+    /* Removes the default blue tap highlight on mobile devices */
+    -webkit-tap-highlight-color: transparent; 
+}
+
+/* Safe area padding for iPhones with the bottom indicator bar */
+.pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+}
+
+/* Prevent ugly scrollbars on a per-element basis */
+.no-scrollbar::-webkit-scrollbar { 
+    display: none; 
+}
+.no-scrollbar { 
+    -ms-overflow-style: none; 
+    scrollbar-width: none; 
+}
+
+/* Custom styles for the hybrid time/text input */
+.input-hybrid {
+    transition: all 0.2s ease-in-out;
+}
+.input-hybrid[type="time"].is-text {
+    /* Hide time-picker text/icon when showing text mode */
+    color: transparent; 
+}
+
+/* Style for text-mode toggle button */
+.text-mode-btn.active {
+    background-color: #2563eb; /* Tailwind primary-600 */
+    color: white;
+}
+
+/* Custom style for notes in the data table */
+.note-cell {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+/* Page Transition Animations */
+main {
+    display: none;
+    /* Smooth slide-up fade for switching pages */
+    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpFade { 
+    from { 
+        opacity: 0; 
+        transform: translateY(15px); 
+    } 
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    } 
+}
+
+main.active {
+    display: block;
+}
+
+/* Calendar Layout Styles */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.calendar-day {
+    min-height: 35px; /* Reduced from 85px */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Modal Animations */
+.modal-enter { 
+    opacity: 0; 
+    transform: scale(0.95) translateY(10px); 
+}
+.modal-enter-active { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+    transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1); 
+}
+.modal-leave { 
+    opacity: 1; 
+    transform: scale(1); 
+}
+.modal-leave-active { 
+    opacity: 0; 
+    transform: scale(0.95) translateY(10px); 
+    transition: all 150ms ease-in; 
+}
+
+/* Ensure the floating nav stays above the safe area on iPhones */
+#bottom-nav {
+    margin-bottom: env(safe-area-inset-bottom);
+}
+
+/* Modern Navigation Indicator Animations */
+.nav-link {
+    transition: all 0.3s ease;
+}
+.nav-link svg {
+    transition: all 0.3s ease;
+}
+
+/* Active Nav Link Styling - Soft Background Pill */
+.nav-link.active {
+    background-color: #f0f9ff; /* primary-50 */
+    color: #178aff; /* MAIN COLOR */
+    font-weight: 500;
+}
+
+/* Active Nav Link Styling - Dark Mode */
+.dark .nav-link.active {
+    background-color: rgba(23, 138, 255, 0.15); /* Transparent MAIN COLOR */
+    color: #6fcfff; /* ACCENT COLOR */
+}
+
+/* Bold the icon slightly when active to match the new weight */
+.nav-link.active svg {
+    stroke-width: 2;
+    transform: scale(1.05); /* Very subtle pop */
+}
+/* Dark mode specific for nav link */
+.dark .nav-link.active {
+    color: #60a5fa; /* Tailwind primary-400 */
+}

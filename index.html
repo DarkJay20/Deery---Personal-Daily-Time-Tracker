@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deery - Track your time and earnings in one place</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#178aff">
+    <link rel="apple-touch-icon" href="Expressions/Deery_Normal.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Configured for the Custom Blue Palette
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',  // Soft highlight
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#6fcfff', // ACCENT COLOR
+                            500: '#3baaff', // Mid tone
+                            600: '#178aff', // MAIN COLOR
+                            700: '#0072d6',
+                            800: '#005bb0',
+                            900: '#004b91',
+                        },
+                        appBg: '#d5edff',   // BACKGROUND COLOR
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            text: '#f8fafc',
+                            muted: '#94a3b8'
+                        }
+                    },
+                    borderRadius: {
+                        'xl': '0.75rem',  /* 12px - for buttons and inputs */
+                        '2xl': '1rem',    /* 16px - for main cards */
+                        '3xl': '1.25rem', /* 20px - if you need a slightly larger option later */
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-appBg dark:bg-dark-bg min-h-screen transition-colors duration-200 selection:bg-primary-200 dark:selection:bg-primary-800 antialiased text-slate-800 dark:text-slate-200">
+
+    <div id="page-onboarding" class="fixed inset-0 z-50 bg-slate-50 dark:bg-dark-bg flex flex-col items-center justify-between p-6 hidden transition-opacity duration-300">
+        <div class="flex-1 flex flex-col justify-center items-center w-full max-w-md space-y-8">
+            <div class="text-center space-y-4">
+                <div class="w-24 h-24 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary-600 dark:text-primary-400"><path d="M8 3v3a2 2 0 0 1-2 2H3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M16 21v-3a2 2 0 0 1 2-2h3"></path></svg>
+                </div>
+                <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Welcome to Deery</h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm">Let's get your daily time tracking set up.</p>
+            </div>
+            
+            <form id="onboarding-form" class="w-full space-y-4">
+                <div>
+                    <label for="onboarding-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">What should we call you?</label>
+                    <input type="text" id="onboarding-name" required placeholder="e.g. Deery" class="w-full p-4 border border-slate-200 dark:border-dark-border rounded-2xl shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-card text-slate-900 dark:text-white transition-all">
+                </div>
+                <button type="submit" class="w-full flex justify-center items-center bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold py-4 px-4 rounded-2xl shadow-lg transition-transform transform hover:-translate-y-0.5">
+                    Start Tracking
+                </button>
+            </form>
+        </div>
+        
+        <div class="pb-8 text-center px-4">
+            <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">About Deery</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm mx-auto">
+                Deery is your personal companion for tracking work hours, monitoring lates and undertimes, and estimating your earnings in one place. Stay on top of your schedule and achieve perfect attendance!
+            </p>
+        </div>
+    </div>
+
+  <header class="sticky top-0 z-20 bg-white/80 dark:bg-dark-bg/80 backdrop-blur-xl border-b border-slate-200 dark:border-dark-border transition-colors duration-200">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between overflow-hidden">
+            
+           <!-- Made the text smaller (text-base) and removed 'font-bold' from the main container -->
+            <h1 id="live-greeting" class="text-base sm:text-lg text-slate-900 dark:text-white truncate pr-4">
+                Good Morning!
+            </h1>
+            
+            <button id="nav-notification-btn" class="relative p-2 text-slate-500 hover:text-primary-600 dark:text-slate-400 dark:hover:text-primary-400 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <span id="notification-badge" class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-dark-bg hidden"></span>
+                <span id="notification-cleared-indicator" class="absolute top-1 right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white dark:border-dark-bg hidden flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+            </button>
+        </div>
+    </header>
+
+    <div id="toast-container" class="fixed top-4 right-4 sm:top-6 sm:right-6 z-50 flex flex-col items-end gap-2 pointer-events-none"></div>
+
+  <div class="max-w-4xl mx-auto p-4 pb-24" id="main-container">
+        
+        <main id="page-home" class="active space-y-4"> 
+            
+          <div class="relative mt-2 mb-2">
+                <div class="bg-gradient-to-br from-primary-400 to-primary-600 dark:from-primary-700 dark:to-primary-900 rounded-2xl shadow-md h-[120px] sm:h-[130px] flex items-center justify-end relative px-3 sm:px-6">
+                    
+                    <!-- Nudged left with -left-4 (mobile) and left-0 (desktop) -->
+                    <img id="main-deery-img" src="Expressions/Deery_Normal.png" alt="Deery Status" class="absolute bottom-0 -left-4 sm:left-0 h-[145px] sm:h-[160px] w-auto max-w-none z-10 drop-shadow-2xl transition-transform hover:scale-[1.02] duration-300 origin-bottom pointer-events-none">
+                    
+                   <!-- Reduced width (125px instead of 115px) to push text further right -->
+                    <div class="w-[calc(100%-110px)] sm:w-[calc(100%-150px)] text-center relative z-20 flex flex-col items-center justify-center pl-1">
+                        <div id="live-clock" class="text-3xl min-[375px]:text-4xl sm:text-5xl font-bold tracking-tight text-white drop-shadow-sm mb-0.5 whitespace-nowrap">--:-- AM</div>
+                        <div id="live-date" class="text-[9px] min-[375px]:text-[10px] sm:text-xs font-medium text-white/90 whitespace-nowrap overflow-hidden text-ellipsis w-full">Loading date...</div>
+                    </div>
+                </div>
+            </div>
+
+           <div id="quick-log-card" class="mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-white dark:bg-dark-card border-slate-100 dark:border-dark-border">
+                <!-- Added id="quick-log-header" -->
+                <h2 id="quick-log-header" class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white pb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Quick Log for Today
+                </h2>
+                
+                <div class="space-y-2" id="quick-log-container"></div>
+            </div>
+            
+           <div class="mb-2 bg-white dark:bg-dark-card p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border transition-colors duration-200 flex flex-col items-center">
+                <div id="today-salary-summary" class="w-full">
+                    <p class="text-slate-500 dark:text-slate-400 text-center">Calculating...</p>
+                </div>
+                
+                <button id="go-to-salary" class="mt-2 text-xs sm:text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 transition-colors">
+                    View Full Salary Details &rarr;
+                </button>
+            </div>
+        </main>
+
+        <main id="page-editor" class="space-y-4">
+            <form id="log-editor-form" class="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border space-y-4 transition-colors duration-200">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                    Add / Edit Log Entry
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="editor-date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Date</label>
+                        <input type="date" id="editor-date" required class="w-full py-2 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm">
+                    </div>
+                   <div class="overflow-hidden">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Daily Status</label>
+                        <button type="button" id="editor-status-btn" class="w-full flex justify-between items-center py-2.5 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:border-primary-500 focus:ring-2 focus:ring-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm font-medium">
+                            <span id="editor-status-text" class="truncate flex-1 text-left mr-2">Regular Work</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 flex-shrink-0"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <input type="hidden" id="editor-status-value" value="regular">
+                    </div>
+                </div>
+
+                <div id="editor-time-inputs" class="grid grid-cols-2 gap-3 sm:gap-4 transition-opacity duration-300">
+                    <div id="hybrid-input-morningIn"></div>
+                    <div id="hybrid-input-morningOut"></div>
+                    <div id="hybrid-input-afternoonIn"></div>
+                    <div id="hybrid-input-afternoonOut"></div>
+                </div>
+                
+                <div>
+                    <label for="editor-notes" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Notes (Optional)</label>
+                    <input type="text" id="editor-notes" placeholder="e.g., WFH, Project Meeting" class="w-full py-2 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm">
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                    <button type="submit" class="flex-1 w-full flex justify-center items-center bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-medium py-2.5 px-4 rounded-xl shadow-md transition-transform transform hover:-translate-y-0.5 text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        Save Entry
+                    </button>
+                    <button type="button" id="editor-delete" class="hidden w-1/3 flex justify-center items-center bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-medium py-2.5 px-4 rounded-xl shadow-md transition-all text-sm">
+                        Delete
+                    </button>
+                </div>
+            </form>
+            
+            <form id="bulk-apply-form" class="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border space-y-4 transition-colors duration-200">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="m16 16-4-4-4 4"></path></svg>
+                    Bulk Apply Status
+                </h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Apply a status (e.g., "Holiday") to all workdays in a date range.</p>
+                <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                        <label for="bulk-start-date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Start Date</label>
+                        <input type="date" id="bulk-start-date" required class="w-full py-2 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm">
+                    </div>
+                    <div>
+                        <label for="bulk-end-date" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">End Date</label>
+                        <input type="date" id="bulk-end-date" required class="w-full py-2 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label for="bulk-status" class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Status to Apply</label>
+                   <select id="bulk-status" class="w-full py-2 px-3 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white transition-all text-sm font-medium"></select>
+                </div>
+                <button type="submit" class="w-full flex justify-center items-center bg-slate-800 hover:bg-slate-900 dark:bg-slate-600 dark:hover:bg-slate-500 text-white font-medium py-2.5 px-4 rounded-xl shadow-md transition-all text-sm">
+                    Apply to Date Range
+                </button>
+            </form>
+        </main>
+
+        <main id="page-view-data" class="space-y-4">
+            
+            <div class="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border transition-colors duration-200">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 mb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    Monthly Dashboard
+                </h2>
+                
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="flex-1 bg-gradient-to-br from-primary-500 to-primary-700 dark:from-primary-700 dark:to-primary-900 rounded-2xl p-4 text-white shadow-md flex items-center justify-between">
+                        <div>
+                            <div class="text-[10px] sm:text-xs font-medium text-primary-100 uppercase tracking-wider mb-0.5">Total Hours</div>
+                            <div class="text-3xl font-bold tracking-tight" id="stats-hours">0.00</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] sm:text-xs font-medium text-primary-100 uppercase tracking-wider mb-0.5">Work Days</div>
+                            <div class="text-xl font-bold" id="stats-work-days">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 grid grid-cols-3 gap-2">
+                        <div class="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 flex flex-col items-center justify-center border border-red-100 dark:border-red-800">
+                            <div class="text-xl font-bold text-red-600 dark:text-red-400" id="stats-lates">0</div>
+                            <div class="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider mt-0.5">Lates</div>
+                        </div>
+                        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-2xl p-2 flex flex-col items-center justify-center border border-orange-100 dark:border-orange-800">
+                            <div class="text-xl font-bold text-orange-600 dark:text-orange-400" id="stats-undertimes">0</div>
+                            <div class="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider mt-0.5 text-center">Early Cut</div>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-2 flex flex-col items-center justify-center border border-slate-200 dark:border-slate-700">
+                            <div class="text-xl font-bold text-slate-700 dark:text-slate-300" id="stats-absences">0</div>
+                            <div class="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider mt-0.5">Absent</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between gap-4">
+    <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white flex items-start sm:items-center shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500 mt-0.5 sm:mt-0"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2h0z"></path><path d="M15 2v20"></path><path d="M8 7h5"></path><path d="M8 12h5"></path><path d="M8 17h5"></path></svg>
+        Log Entries
+    </h2>
+    
+    <!-- Stacked & Balanced Controls -->
+    <!-- Added w-full on mobile, and a fixed width (sm:w-[240px]) on desktop so it doesn't look stretched out -->
+    <div class="flex flex-col gap-2.5 w-full sm:w-[240px] shrink-0">
+        
+        <!-- TOP: 50/50 Split Toggle Switch -->
+        <div class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-full" role="group">
+            <!-- Added flex-1 and text-center to maximize width equally -->
+            <button type="button" id="view-toggle-table" class="flex-1 px-2 py-1.5 text-xs font-bold text-white bg-primary-600 rounded-md shadow-sm transition-colors text-center">Table</button>
+            <button type="button" id="view-toggle-calendar" class="flex-1 px-2 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 rounded-md transition-colors text-center">Grid</button>
+        </div>
+        
+        <!-- BOTTOM: 50/50 Split Dropdowns -->
+        <div class="flex items-center gap-2 w-full">
+            <!-- Added flex-1 and min-w-0 to perfectly balance the two dropdowns -->
+            <select id="view-filter-month" class="flex-1 min-w-0 py-1.5 px-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs shadow-sm focus:ring-primary-500 focus:border-primary-500 text-slate-900 dark:text-white outline-none font-medium"></select>
+            <select id="view-filter-year" class="flex-1 min-w-0 py-1.5 px-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-xs shadow-sm focus:ring-primary-500 focus:border-primary-500 text-slate-900 dark:text-white outline-none font-medium"></select>
+        </div>
+        
+    </div>
+</div>
+                
+                <div id="view-mode-table" class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider bg-blue-50/50 dark:bg-blue-900/10">In</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider bg-blue-50/50 dark:bg-blue-900/10">Out</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider bg-primary-50/50 dark:bg-primary-900/10">In</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider bg-primary-50/50 dark:bg-primary-900/10">Out</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hrs</th>
+                                <th class="px-2 py-2 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Notes</th>
+                                <th class="px-2 py-2 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-table-body" class="bg-white dark:bg-dark-card divide-y divide-slate-100 dark:divide-slate-700/50">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="view-mode-calendar" class="hidden p-3 sm:p-4">
+                    <div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">SUN</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">MON</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">TUE</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">WED</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">THU</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">FRI</div>
+                        <div class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500">SAT</div>
+                    </div>
+                    <div id="calendar-grid" class="calendar-grid"></div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border transition-colors duration-200">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 mb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Data Tools
+                </h2>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button id="backup-json-btn" class="flex flex-col items-center justify-center p-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 rounded-xl shadow-sm text-xs font-medium transition-all hover:bg-emerald-100">
+                        Backup (.json)
+                    </button>
+                    <button id="restore-json-btn" class="flex flex-col items-center justify-center p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400 rounded-xl shadow-sm text-xs font-medium transition-all hover:bg-orange-100">
+                        Restore (.json)
+                    </button>
+                    <button id="import-button" class="flex flex-col items-center justify-center p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 rounded-xl shadow-sm text-xs font-medium transition-all hover:bg-blue-100">
+                        Import (.xlsx)
+                    </button>
+                    <button id="export-month" class="flex flex-col items-center justify-center p-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl shadow-sm text-xs font-medium transition-all hover:bg-slate-200">
+                        Export Month
+                    </button>
+                    <button id="export-15th" class="hidden"></button>
+                    <button id="export-all" class="hidden"></button>
+                    <input type="file" id="import-file-input" accept=".xlsx, .xls" class="hidden">
+                    <input type="file" id="restore-json-input" accept=".json" class="hidden">
+                </div>
+                
+                <button id="clear-all-data" class="w-full flex items-center justify-center p-2 mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl shadow-sm text-xs font-bold transition-all hover:bg-red-100">
+                    Clear All Data
+                </button>
+            </div>
+        </main>
+
+        <main id="page-salary" class="space-y-4">
+            
+            <div class="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border transition-colors duration-200">
+                <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 mb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+                    Salary Estimate
+                </h2>
+                
+                <div class="bg-gradient-to-br from-primary-500 to-primary-700 dark:from-primary-700 dark:to-primary-900 rounded-2xl p-4 text-white shadow-md text-center mb-3">
+                    <div class="text-[10px] sm:text-xs font-medium text-primary-100 uppercase tracking-wider mb-0.5">Today's Net Pay</div>
+                    <div class="text-3xl sm:text-4xl font-bold tracking-tight mb-1" id="salary-today">PHP 0.00</div>
+                    <div class="text-[10px] text-primary-100 font-medium bg-primary-800/30 inline-block px-2.5 py-0.5 rounded-full" id="salary-today-deductions"></div>
+                </div>
+
+                <!-- Upgraded to a 3-column grid with slightly tighter padding/text to fit mobile screens perfectly -->
+<div class="grid grid-cols-3 gap-2 sm:gap-3">
+    <div class="p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl text-center flex flex-col justify-center">
+        <div class="text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 leading-tight">1st-15th<br class="sm:hidden"> Cutoff</div>
+        <div class="text-sm sm:text-lg font-bold text-primary-600 dark:text-primary-400 truncate" id="salary-15th">PHP 0.00</div>
+        <div class="text-[8px] sm:text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight line-clamp-2" id="salary-15th-summary"></div>
+    </div>
+    
+    <div class="p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl text-center flex flex-col justify-center">
+        <div class="text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 leading-tight">16th-End<br class="sm:hidden"> Cutoff</div>
+        <div class="text-sm sm:text-lg font-bold text-primary-600 dark:text-primary-400 truncate" id="salary-16th">PHP 0.00</div>
+        <div class="text-[8px] sm:text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight line-clamp-2" id="salary-16th-summary"></div>
+    </div>
+
+    <div class="p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 rounded-xl text-center flex flex-col justify-center">
+        <div class="text-[8px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 leading-tight">Full<br class="sm:hidden"> Month</div>
+        <div class="text-sm sm:text-lg font-bold text-primary-600 dark:text-primary-400 truncate" id="salary-month">PHP 0.00</div>
+        <div class="text-[8px] sm:text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight line-clamp-2" id="salary-month-summary"></div>
+    </div>
+</div>
+            </div>
+
+             <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                    <h2 class="text-base sm:text-lg font-semibold text-slate-800 dark:text-white flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        Monthly History
+                    </h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                        <thead class="bg-slate-50 dark:bg-slate-800/50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Month</th>
+                                <th class="px-2 py-2 text-right text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Days</th>
+                                <th class="px-2 py-2 text-right text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hrs</th>
+                                <th class="px-2 py-2 text-right text-[9px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider">Ded.</th>
+                                <th class="px-2 py-2 text-right text-[9px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Net Pay</th>
+                                <th class="px-3 py-2 text-right text-[9px] font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Actual Received</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salary-history-body" class="bg-white dark:bg-dark-card divide-y divide-slate-100 dark:divide-slate-700/50">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <main id="page-settings" class="space-y-4">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-white px-2 flex items-center mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                App Settings
+            </h2>
+
+            <form id="settings-form" class="space-y-5">
+                
+                <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                    <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Appearance</div>
+                    <div class="p-3 sm:p-4 flex items-center justify-between">
+                        <label for="setting-theme" class="text-sm font-medium text-slate-700 dark:text-slate-300">Theme Preference</label>
+                        <select id="setting-theme" class="py-1.5 px-3 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm focus:ring-primary-500 focus:border-primary-500 outline-none">
+                            <option value="light">Light Mode</option>
+                            <option value="dark">Dark Mode</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                    <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rates & Penalties (PHP)</div>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-daily-salary" class="text-sm font-medium text-slate-700 dark:text-slate-300">Daily Salary</label>
+                            <input type="number" id="setting-daily-salary" step="0.01" class="w-24 py-1.5 px-2 text-right border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-deduction" class="text-sm font-medium text-slate-700 dark:text-slate-300">Deduct per Min Late</label>
+                            <input type="number" id="setting-deduction" step="1" class="w-24 py-1.5 px-2 text-right border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-undertime-deduction" class="text-sm font-medium text-slate-700 dark:text-slate-300">Deduct per Min Early</label>
+                            <input type="number" id="setting-undertime-deduction" step="1" class="w-24 py-1.5 px-2 text-right border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                    <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Schedule Rules</div>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-morning-late" class="text-sm font-medium text-slate-700 dark:text-slate-300">AM Late After</label>
+                            <input type="time" id="setting-morning-late" class="w-28 py-1.5 px-2 text-center border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-afternoon-late" class="text-sm font-medium text-slate-700 dark:text-slate-300">PM Late After</label>
+                            <input type="time" id="setting-afternoon-late" class="w-28 py-1.5 px-2 text-center border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-morning-undertime" class="text-sm font-medium text-slate-700 dark:text-slate-300 text-orange-600 dark:text-orange-400">AM Undertime Before</label>
+                            <input type="time" id="setting-morning-undertime" class="w-28 py-1.5 px-2 text-center border border-orange-200 dark:border-orange-800 rounded-lg shadow-sm bg-orange-50 dark:bg-orange-900/20 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                        <div class="p-3 sm:p-4 flex items-center justify-between">
+                            <label for="setting-afternoon-undertime" class="text-sm font-medium text-slate-700 dark:text-slate-300 text-orange-600 dark:text-orange-400">PM Undertime Before</label>
+                            <input type="time" id="setting-afternoon-undertime" class="w-28 py-1.5 px-2 text-center border border-orange-200 dark:border-orange-800 rounded-lg shadow-sm bg-orange-50 dark:bg-orange-900/20 text-slate-900 dark:text-white text-sm outline-none">
+                        </div>
+                    </div>
+                </div>
+                
+<!-- TEMPORARY AVATAR TEST PANEL -->
+                <div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-violet-200 dark:border-violet-800 overflow-hidden transition-colors duration-200 mt-8 mb-8">
+                    <div class="px-4 py-2 bg-violet-50 dark:bg-violet-900/30 border-b border-violet-100 dark:border-violet-800 text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider">
+                        Developer: Test Avatars (9)
+                    </div>
+                    <!-- Forced into a 3 column grid with smaller text so they all fit! -->
+                    <div class="p-3 grid grid-cols-3 gap-2 text-center">
+                        <button type="button" onclick="testAvatar('Deery_Normal.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Normal</button>
+                        <button type="button" onclick="testAvatar('Deery_Very Happy.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Very Happy</button>
+                        <button type="button" onclick="testAvatar('Deery_Relaxed.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Relaxed</button>
+                        
+                        <button type="button" onclick="testAvatar('Deery_GoodJob.png')" class="p-2 text-[10px] sm:text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-xl hover:bg-primary-100 transition-colors">Good Job</button>
+                        <button type="button" onclick="testAvatar('Deery_Sad.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Sad</button>
+                        <button type="button" onclick="testAvatar('Deery_Dissapointed.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Disappoint</button>
+                        
+                        <button type="button" onclick="testAvatar('Deery_Sleepy.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Sleepy</button>
+                        <button type="button" onclick="testAvatar('Deery_Yawning.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Yawning</button>
+                        <button type="button" onclick="testAvatar('Deery_Sleeping.png')" class="p-2 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition-colors">Sleeping</button>
+                    </div>
+                </div>
+
+<div class="bg-white dark:bg-dark-card rounded-2xl shadow-sm border border-slate-100 dark:border-dark-border overflow-hidden transition-colors duration-200">
+                    <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
+                        <span>Status & Paid Tags</span>
+                    </div>
+                    <div class="p-3 sm:p-4">
+                        <div id="settings-status-list" class="space-y-2 mb-3">
+                            <!-- Statuses injected by JS -->
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-status-name" placeholder="e.g. Bereavement Leave" class="flex-1 py-1.5 px-3 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none">
+                            <button type="button" id="btn-add-status" class="px-3 py-1.5 bg-slate-800 dark:bg-slate-600 text-white text-sm font-medium rounded-lg hover:bg-slate-900 dark:hover:bg-slate-500 transition-colors">Add</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full flex justify-center items-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-xl shadow-md transition-transform transform hover:-translate-y-0.5 mt-2 text-sm">
+                    Save Settings
+                </button>
+            </form>
+        </main>
+    </div>
+
+
+    
+
+<div id="notification-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden transition-opacity duration-300 opacity-0"></div>
+    <div id="notification-panel" class="fixed inset-y-0 right-0 w-[85%] sm:w-80 bg-white dark:bg-dark-card shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-100 dark:border-dark-border">
+        <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+            <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mr-2 text-primary-500"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                Notifications
+            </h3>
+            <div class="flex items-center gap-3">
+                <button id="clear-notifications-btn" class="text-[10px] sm:text-xs font-bold text-slate-400 hover:text-slate-800 dark:text-slate-500 dark:hover:text-white uppercase tracking-wider transition-colors hidden">
+                    Clear All
+                </button>
+                <button id="close-notifications-btn" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full bg-slate-200/50 dark:bg-slate-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+        
+       <div id="notification-list" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30 dark:bg-dark-bg/30"></div>
+    </div> <!-- This closes notification-panel -->
+
+  
+    <!-- Modal Backdrop and Modal Container -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden transition-opacity duration-300"></div>
+    
+    <!-- Changed: max-w-sm (384px) to max-w-[320px] to make the box noticeably narrower -->
+    <div id="modal" class="fixed z-50 inset-0 w-full max-w-[320px] m-auto h-fit p-4 hidden modal-enter">
+        <!-- Changed: p-6 to p-4 sm:p-5 to reduce the inner empty space -->
+        <div class="bg-white dark:bg-dark-card rounded-2xl shadow-2xl p-4 sm:p-5 transition-colors duration-200">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 id="modal-title" class="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Modal Title</h3>
+                <button id="modal-close-btn" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                <p>Modal content goes here.</p>
+            </div>
+            <div id="modal-footer" class="mt-5 flex justify-end gap-2.5">
+                <button id="modal-cancel-btn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl text-sm font-semibold transition-colors">Cancel</button>
+                <button id="modal-confirm-btn" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+<nav id="bottom-nav" class="fixed bottom-4 sm:bottom-6 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-[400px] z-40 bg-white/95 dark:bg-dark-card/95 backdrop-blur-xl border border-slate-100 dark:border-dark-border shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl hidden transition-all duration-300">
+        <div class="flex justify-between items-center p-2 gap-1">
+            <button class="nav-link flex-1 flex flex-col items-center justify-center py-2 px-1 text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 rounded-2xl active" data-page="home">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="mb-1"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                Home
+            </button>
+            <button class="nav-link flex-1 flex flex-col items-center justify-center py-2 px-1 text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 rounded-2xl" data-page="editor">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="mb-1"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                Add
+            </button>
+            <button class="nav-link flex-1 flex flex-col items-center justify-center py-2 px-1 text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 rounded-2xl" data-page="view-data">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="mb-1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                History
+            </button>
+            <button class="nav-link flex-1 flex flex-col items-center justify-center py-2 px-1 text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 rounded-2xl" data-page="salary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="mb-1"><path d="m16 16-4-4-4 4"></path><path d="M16 8H8v4h8V8z"></path><rect width="20" height="14" x="2" y="6" rx="2"></rect></svg>
+                Salary
+            </button>
+           <button class="nav-link flex-1 flex flex-col items-center justify-center py-2 px-1 text-[10px] sm:text-xs font-normal text-slate-500 dark:text-slate-400 rounded-2xl" data-page="settings">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="mb-1">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                Settings
+            </button>
+        </div>
+    </nav>
+    <script src="script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('ServiceWorker registered successfully!'))
+                    .catch(error => console.log('ServiceWorker registration failed:', error));
+            });
+        }
+    </script>
+</body>
+</html>
