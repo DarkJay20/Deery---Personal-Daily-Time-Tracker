@@ -1383,23 +1383,26 @@ const handleJsonRestore = (e) => {
                 `Restoring backup from <b>${new Date(data.date).toLocaleDateString()}</b>. This will overwrite current data. Continue?`,
                 'confirm',
                 () => {
-                    logs = data.logs;
-                    settings = data.settings;
-                    monthlyData = data.monthlyData || {};
-                    
-                    saveLogs();
-                    saveSettings();
-                    saveMonthlyData();
-                    applyTheme(settings.theme);
-                    
-                    renderLogsTable();
-                    renderStatistics();
-                    renderSalaryPage();
-                    renderSettingsPage();
-                    updateDeeryAvatar();
-                    
-                    showToast('System restored successfully');
-                }
+                            // Step 1: Push the raw backup data straight to browser storage
+                            localStorage.setItem(DB_KEY, JSON.stringify(data.logs || []));
+                            localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings || {}));
+                            localStorage.setItem(MONTHLY_DATA_KEY, JSON.stringify(data.monthlyData || {}));
+                            
+                            // Step 2: Fire your native loading functions! 
+                            // This ensures all missing defaults (like new Statuses) are securely merged and old data is migrated.
+                            loadSettings(); 
+                            loadMonthlyData();
+                            loadLogs();
+                            
+                            // Step 3: Re-render the UI
+                            renderLogsTable();
+                            renderStatistics();
+                            renderSalaryPage();
+                            renderSettingsPage();
+                            updateDeeryAvatar();
+                            
+                            showToast('System restored successfully');
+                        }
             );
         } catch (error) {
             showModal('Error', 'Failed to restore: ' + error.message, 'alert');
