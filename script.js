@@ -2539,11 +2539,13 @@ window.downloadStory = () => {
     // Temporarily remove border-radius so the saved PNG has perfectly square corners
     storyCaptureArea.classList.remove('rounded-2xl');
 
-    html2canvas(storyCaptureArea, {
-        scale: 3, // Multiplies resolution for super crisp text
-        backgroundColor: "#000000",
+   html2canvas(storyCaptureArea, {
+        scale: 3, 
+        backgroundColor: null,  // FIX: This tells the camera to capture a transparent background!
         useCORS: true, 
-        logging: false
+        allowTaint: true,       
+        imageTimeout: 5000,     
+        logging: true           
     }).then(canvas => {
         // Put the rounded corners back on the UI preview
         storyCaptureArea.classList.add('rounded-2xl');
