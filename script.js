@@ -107,6 +107,7 @@ const salaryHistoryBody = document.getElementById('salary-history-body');
 
 // Page: Settings
 const settingsForm = document.getElementById('settings-form');
+const settingUsername = document.getElementById('setting-username');
 const settingTheme = document.getElementById('setting-theme');
 const settingDailySalary = document.getElementById('setting-daily-salary');
 const settingDeduction = document.getElementById('setting-deduction');
@@ -205,16 +206,16 @@ const loadSettings = () => {
         afternoonUndertimeThreshold: '17:00', 
         undertimeDeductionPerMinute: 1,
         statuses: [
-            { id: 'regular', name: 'Regular Work', isPaid: true, requiresTime: true },
-            { id: 'wfh', name: 'Work From Home (WFH)', isPaid: true, requiresTime: false },
-            { id: 'travel', name: 'Official Travel', isPaid: true, requiresTime: false },
-            { id: 'vacation', name: 'Vacation Leave', isPaid: true, requiresTime: false },
-            { id: 'sick', name: 'Sick Leave', isPaid: true, requiresTime: false },
-            { id: 'holiday', name: 'Holiday (Paid)', isPaid: true, requiresTime: false },
-            { id: 'absent', name: 'Absent', isPaid: false, requiresTime: false },
-            { id: 'suspended', name: 'Suspended', isPaid: false, requiresTime: false },
-            { id: 'halfday_am', name: 'Half Day (Morning)', isPaid: false, requiresTime: true },
-            { id: 'halfday_pm', name: 'Half Day (Afternoon)', isPaid: false, requiresTime: true }
+            { id: 'regular', name: 'Regular Work', isPaid: true, reqAM: true, reqPM: true },
+            { id: 'wfh', name: 'Work From Home (WFH)', isPaid: true, reqAM: false, reqPM: false },
+            { id: 'travel', name: 'Official Travel', isPaid: true, reqAM: false, reqPM: false },
+            { id: 'vacation', name: 'Vacation Leave', isPaid: true, reqAM: false, reqPM: false },
+            { id: 'sick', name: 'Sick Leave', isPaid: true, reqAM: false, reqPM: false },
+            { id: 'holiday', name: 'Holiday (Paid)', isPaid: true, reqAM: false, reqPM: false },
+            { id: 'absent', name: 'Absent', isPaid: false, reqAM: false, reqPM: false },
+            { id: 'suspended', name: 'Suspended', isPaid: false, reqAM: false, reqPM: false },
+            { id: 'halfday_am', name: 'Half Day (Morning)', isPaid: false, reqAM: true, reqPM: false },
+            { id: 'halfday_pm', name: 'Half Day (Afternoon)', isPaid: false, reqAM: false, reqPM: true }
         ]
     };
     
@@ -222,16 +223,18 @@ const loadSettings = () => {
     settings = storedSettings ? JSON.parse(storedSettings) : defaultSettings;
     settings = { ...defaultSettings, ...settings };
 
-    // --- MIGRATION: Auto-update the old 'halfday' to the new split versions ---
-    if (settings.statuses && settings.statuses.some(s => s.id === 'halfday')) {
-        settings.statuses = settings.statuses.filter(s => s.id !== 'halfday');
-        settings.statuses.push({ id: 'halfday_am', name: 'Half Day (Morning)', isPaid: false, requiresTime: true });
-        settings.statuses.push({ id: 'halfday_pm', name: 'Half Day (Afternoon)', isPaid: false, requiresTime: true });
-    }
-    // --- MIGRATION: Force WFH to not require time logs ---
+    // --- MIGRATION: Convert old 'requiresTime' format to the new granular AM/PM system ---
     if (settings.statuses) {
-        const wfhStatus = settings.statuses.find(s => s.id === 'wfh');
-        if (wfhStatus) wfhStatus.requiresTime = false;
+        settings.statuses = settings.statuses.map(s => {
+            if (s.reqAM === undefined) {
+                // If it's old data, upgrade it seamlessly
+                if (s.id === 'halfday_am') return { ...s, reqAM: true, reqPM: false };
+                if (s.id === 'halfday_pm') return { ...s, reqAM: false, reqPM: true };
+                if (s.requiresTime) return { ...s, reqAM: true, reqPM: true };
+                return { ...s, reqAM: false, reqPM: false };
+            }
+            return s;
+        });
     }
 
     applyTheme(settings.theme);
@@ -332,7 +335,8 @@ window.testAvatar = (avatarName) => {
 
 const updateDeeryAvatar = () => {
     const now = new Date();
-    const hour = now.getHours();
+    // Use the console's test hour if it exists, otherwise use the real time!
+    const hour = window.debugHour !== undefined ? window.debugHour : now.getHours();
     const todayStr = getISODate(now);
     const todayLog = getLog(todayStr);
     
@@ -373,10 +377,6 @@ const updateDeeryAvatar = () => {
     
     const weekly = checkWeeklyStats();
 
-    // 1. BASE TIME STATES: Early Evening (6 PM to 8:59 PM)
-    if (hour >= 18 && hour < 21) {
-        avatarState = 'Expressions/Deery_Sleepy.png';
-    }
 
     // 2. WEEKLY ACHIEVEMENTS: Overwrites base states
     if (weekly.workDaysCount >= 5 && weekly.perfectAttendanceCount === weekly.workDaysCount) {
@@ -417,15 +417,17 @@ const updateDeeryAvatar = () => {
                 avatarState = 'Expressions/Deery_Sick.png'; // Added the .png extension here
             } else if (currentStatus === 'holiday' || currentStatus === 'vacation') {
                 avatarState = 'Expressions/Deery_Holiday_Leave.png';
-            } else if (!statusObj.requiresTime && statusObj.isPaid) {
+            } else if (!statusObj.reqAM && !statusObj.reqPM && statusObj.isPaid){
                 // Catch-all fallback for any custom paid leaves added via settings
                 avatarState = 'Expressions/Deery_Holiday_Leave.png';
             }
         }
     }
 
-    // 4. ABSOLUTE NIGHTTIME OVERRIDES: Bedtime takes priority over EVERYTHING!
-    if (hour >= 21 && hour < 22) {
+    // 4. ABSOLUTE TIME OVERRIDES: Evening and Bedtime take priority over EVERYTHING!
+    if (hour >= 18 && hour < 21) {
+        avatarState = 'Expressions/Deery_Sleepy.png'; // 6:00 PM to 8:59 PM
+    } else if (hour >= 21 && hour < 22) {
         avatarState = 'Expressions/Deery_Yawning.png'; // 9:00 PM to 9:59 PM
     } else if (hour >= 22 || hour <= 4) {
         avatarState = 'Expressions/Deery_Sleeping.png'; // 10:00 PM to 4:59 AM
@@ -566,7 +568,9 @@ const updateLiveClock = () => {
     // Formatted to match UI: Tuesday, April 28, 2026
     liveDate.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     
-    const currentHour = now.getHours();
+    // --- UPDATED GREETING LOGIC ---
+    // Use the debugHour hook if you're still testing, otherwise get real time
+    const currentHour = window.debugHour !== undefined ? window.debugHour : now.getHours();
     let timePhrase = "";
     
     if (currentHour < 12) {
@@ -577,7 +581,6 @@ const updateLiveClock = () => {
         timePhrase = "Good Evening";
     }
     
-    // We use innerHTML here so we can wrap the username in a 'font-bold' span
     const nameToDisplay = currentUsername || 'User';
     liveGreeting.innerHTML = `${timePhrase}, <span class="font-bold">${nameToDisplay}</span>!`;
     
@@ -591,27 +594,19 @@ const renderQuickLog = () => {
     const today = getISODate(new Date());
     const log = getOrCreateLog(today);
     
-    // Identify current status from your new Unified Dropdown
     const statusId = log.status || 'regular';
     const statusObj = settings.statuses.find(s => s.id === statusId) || settings.statuses[0];
     
     quickLogContainer.innerHTML = ''; 
     
-    // --- NEW: Toggle the Quick Log Header ---
     if (quickLogHeader) {
-        if (!statusObj.requiresTime) {
-            quickLogHeader.classList.add('hidden'); // Hide for WFH, Travel, etc.
-        } else {
-            quickLogHeader.classList.remove('hidden'); // Show for Regular Days
-        }
+        if (!statusObj.reqAM && !statusObj.reqPM) quickLogHeader.classList.add('hidden'); 
+        else quickLogHeader.classList.remove('hidden'); 
     }
-    // ==========================================
+
     // CASE A: Full Day Status (Absent, Holiday, Leave)
-    // ==========================================
-    if (!statusObj.requiresTime) {
-        // Change the entire outer card to a Red styling
+    if (!statusObj.reqAM && !statusObj.reqPM) {
         quickLogCard.className = 'mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800';
-        
         quickLogContainer.innerHTML = `
             <div class="flex flex-col items-center justify-center py-4 animate-slideUpFade">
                 <div class="w-14 h-14 bg-red-100 dark:bg-red-800/80 text-red-500 dark:text-red-300 rounded-full flex items-center justify-center shadow-sm mb-3">
@@ -621,32 +616,15 @@ const renderQuickLog = () => {
                 <p class="text-sm text-red-600 dark:text-red-400 font-medium text-center">No time logs required for today.</p>
             </div>
         `;
-        return; // Stop running here so no buttons are generated!
+        return; 
     }
 
-    // ==========================================
-    // CASE B: Time Logs Required (Regular, WFH, Half Day)
-    // ==========================================
-    let allDone = false;
-    let disableMorning = false;
-    let disableAfternoon = false;
-
-    // Explicit Half Day Detection
-    if (statusId === 'halfday_am') {
-        disableAfternoon = true; // Lock the afternoon instantly
-        if (log.morningIn && log.morningOut) allDone = true;
-    } else if (statusId === 'halfday_pm') {
-        disableMorning = true; // Lock the morning instantly
-        if (log.afternoonIn && log.afternoonOut) allDone = true;
-    } else {
-        // Regular days require all 4 logs to be complete
-        if (log.morningIn && log.morningOut && log.afternoonIn && log.afternoonOut) {
-            allDone = true;
-        }
-    }
+    // CASE B: Evaluate Completion based on rules
+    let amDone = !statusObj.reqAM || (log.morningIn && log.morningOut);
+    let pmDone = !statusObj.reqPM || (log.afternoonIn && log.afternoonOut);
+    let allDone = amDone && pmDone;
 
     if (allDone) {
-        // Swap card to completed green state
         quickLogCard.className = 'mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-700';
         const hours = calculateHours(log);
         quickLogContainer.innerHTML = `
@@ -661,10 +639,7 @@ const renderQuickLog = () => {
         return; 
     }
 
-    // ==========================================
     // CASE C: Draw the Buttons
-    // ==========================================
-    // Ensure card is default white/dark
     quickLogCard.className = 'mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-white dark:bg-dark-card border-slate-100 dark:border-dark-border';
 
     const fields = [
@@ -674,12 +649,11 @@ const renderQuickLog = () => {
         { key: 'afternoonOut', label: 'Afternoon Out' }
     ];
 
-    // Figure out which button should be blue and active
     let nextFieldKey = null;
     for (const f of fields) {
         const isMorning = f.key.includes('morning');
-        if (isMorning && disableMorning) continue;
-        if (!isMorning && disableAfternoon) continue;
+        if (isMorning && !statusObj.reqAM) continue;
+        if (!isMorning && !statusObj.reqPM) continue;
         
         if (!log[f.key]) {
             nextFieldKey = f.key;
@@ -687,57 +661,40 @@ const renderQuickLog = () => {
         }
     }
 
-    // Generate the 4 buttons
     for (const f of fields) {
         const logValue = log[f.key];
         const button = document.createElement('button');
         button.dataset.field = f.key;
         
         const isMorning = f.key.includes('morning');
-        const isBlockedByHalfDay = (isMorning && disableMorning) || (!isMorning && disableAfternoon);
+        const isBlocked = (isMorning && !statusObj.reqAM) || (!isMorning && !statusObj.reqPM);
 
-        if (isBlockedByHalfDay) {
-            // RED DISABLED: The unused half of a Half Day
+        if (isBlocked) {
             button.className = 'w-full flex justify-between items-center p-3 rounded-2xl text-left bg-red-50 dark:bg-red-900/20 text-red-500 border border-red-200 dark:border-red-800/50 opacity-80 font-normal cursor-not-allowed';
-            button.innerHTML = `<span>${f.label}</span> <span class="text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-800/50 px-2 py-0.5 rounded-md">Half Day</span>`;
+            button.innerHTML = `<span>${f.label}</span> <span class="text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-800/50 px-2 py-0.5 rounded-md">Not Required</span>`;
             button.disabled = true;
         } 
         else if (logValue) {
-            // Check penalties for this specific row
             const isLateRow = f.key.includes('In') && isLate(logValue, f.key === 'morningIn' ? settings.morningLateThreshold : settings.afternoonLateThreshold);
             const isUnderRow = f.key.includes('Out') && isUndertime(logValue, f.key === 'morningOut' ? settings.morningUndertimeThreshold : settings.afternoonUndertimeThreshold);
             
-            let btnClass = '';
-            let badge = '';
-
-            if (isLateRow) {
-                // RED: Late
-                btnClass = 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:border-red-800 dark:text-red-300';
-                badge = '<span class="ml-2 text-[9px] font-bold uppercase tracking-wider bg-red-200 dark:bg-red-800/50 px-1.5 py-0.5 rounded text-red-700 dark:text-red-200">Late</span>';
-            } else if (isUnderRow) {
-                // ORANGE: Undertime
-                btnClass = 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/40 dark:border-orange-800 dark:text-orange-300';
-                badge = '<span class="ml-2 text-[9px] font-bold uppercase tracking-wider bg-orange-200 dark:bg-orange-800/50 px-1.5 py-0.5 rounded text-orange-700 dark:text-orange-200">Early</span>';
-            } else {
-                // GREEN: On Time
-                btnClass = 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:border-green-800 dark:text-green-300';
-            }
+            let btnClass = isLateRow ? 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:border-red-800 dark:text-red-300' : 
+                           isUnderRow ? 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/40 dark:border-orange-800 dark:text-orange-300' : 
+                           'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:border-green-800 dark:text-green-300';
+            
+            let badge = isLateRow ? '<span class="ml-2 text-[9px] font-bold uppercase tracking-wider bg-red-200 dark:bg-red-800/50 px-1.5 py-0.5 rounded text-red-700 dark:text-red-200">Late</span>' : 
+                        isUnderRow ? '<span class="ml-2 text-[9px] font-bold uppercase tracking-wider bg-orange-200 dark:bg-orange-800/50 px-1.5 py-0.5 rounded text-orange-700 dark:text-orange-200">Early</span>' : '';
 
             button.className = `w-full flex justify-between items-center p-3 rounded-2xl text-left border ${btnClass} font-normal`;
-            
-            // Re-use the 12-hour formatter if you added it previously!
             const displayTime = typeof formatTime12Hour === 'function' ? formatTime12Hour(logValue) : logValue;
-            
             button.innerHTML = `<span class="flex items-center">${f.label} ${badge}</span> <span>${displayTime}</span>`;
         }
         else if (f.key === nextFieldKey) {
-            // BLUE: Ready to tap
             button.className = 'w-full flex justify-between items-center p-3 rounded-2xl text-left bg-primary-600 text-white border border-primary-700 shadow-lg animate-pulse font-normal';
             button.innerHTML = `<span>${f.label}</span> <span>Tap to Log Now</span>`;
             button.onclick = () => handleQuickLog(f.key);
         } 
         else {
-            // GRAY: Future empty button
             button.className = 'w-full flex justify-between items-center p-3 rounded-2xl text-left bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 opacity-60 font-normal cursor-not-allowed';
             button.innerHTML = `<span>${f.label}</span> <span>--:--</span>`;
             button.disabled = true;
@@ -782,15 +739,41 @@ const renderTodaySalarySummary = () => {
     
     todaySalarySummary.innerHTML = `
         <div class="grid grid-cols-2 gap-2 sm:gap-3 w-full">
-            <div class="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-2xl py-2 px-3 sm:p-3 flex flex-col items-center justify-center text-center shadow-sm">
-                <div class="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight mb-1 tracking-wide">Today's Pay<br>Estimate</div>
-                <div class="text-lg sm:text-xl font-bold text-primary-600 dark:text-primary-400 tracking-tight">PHP ${displayPay}</div>
+            
+            <!-- Pay Estimate Card -->
+            <div class="bg-primary-50 dark:bg-primary-900/10 border border-primary-200 dark:border-primary-800/50 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-center items-center shadow-sm transition-colors duration-200">
+                <!-- Header Group (Centered) -->
+                <div class="flex items-center justify-center gap-2 mb-1.5 sm:mb-2 w-full">
+                    <div class="shrink-0 flex items-center justify-center">
+                        <img src="Icons/EstimatePay.gif" alt="Pay Estimate" class="w-7 h-7 sm:w-8 sm:h-8 object-contain">
+                    </div>
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight text-left">
+                        Today's Pay<br>Estimate
+                    </div>
+                </div>
+                <!-- Amount (Centered) -->
+                <div class="text-lg sm:text-xl font-bold text-primary-500 dark:text-primary-400 tracking-tight text-center w-full">
+                    PHP ${displayPay}
+                </div>
             </div>
             
-            <div class="bg-[#fff0f0] dark:bg-red-900/20 border border-[#ffcdcd] dark:border-red-800 rounded-2xl py-2 px-3 sm:p-3 flex flex-col items-center justify-center text-center shadow-sm">
-                <div class="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight mb-1 tracking-wide">Deductions<br>Today</div>
-                <div class="text-lg sm:text-xl font-bold text-red-500 dark:text-red-400 tracking-tight">PHP ${displayDeductions}</div>
+            <!-- Deductions Card -->
+            <div class="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/50 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-center items-center shadow-sm transition-colors duration-200">
+                <!-- Header Group (Centered) -->
+                <div class="flex items-center justify-center gap-2 mb-1.5 sm:mb-2 w-full">
+                    <div class="shrink-0 flex items-center justify-center">
+                        <img src="Icons/Deduction.gif" alt="Deductions" class="w-7 h-7 sm:w-8 sm:h-8 object-contain">
+                    </div>
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight text-left">
+                        Deductions<br>Today
+                    </div>
+                </div>
+                <!-- Amount (Centered) -->
+                <div class="text-lg sm:text-xl font-bold text-red-500 dark:text-red-400 tracking-tight text-center w-full">
+                    PHP ${displayDeductions}
+                </div>
             </div>
+            
         </div>
     `;
 };
@@ -832,40 +815,37 @@ const updateEditorStatusUI = (statusId) => {
     const aIn = document.getElementById('hybrid-input-afternoonIn');
     const aOut = document.getElementById('hybrid-input-afternoonOut');
 
+    // Reset visibility
     editorTimeInputs.classList.remove('opacity-30', 'pointer-events-none');
     [mIn, mOut, aIn, aOut].forEach(el => el.classList.remove('opacity-30', 'pointer-events-none'));
 
-    if (statusObj.requiresTime) {
-        if (statusObj.id === 'halfday_am') {
-            aIn.classList.add('opacity-30', 'pointer-events-none');
-            aOut.classList.add('opacity-30', 'pointer-events-none');
-        } else if (statusObj.id === 'halfday_pm') {
-            mIn.classList.add('opacity-30', 'pointer-events-none');
-            mOut.classList.add('opacity-30', 'pointer-events-none');
-        }
-    } else {
+    // Lock AM inputs if not required
+    if (!statusObj.reqAM) {
+        mIn.classList.add('opacity-30', 'pointer-events-none');
+        mOut.classList.add('opacity-30', 'pointer-events-none');
+    }
+    // Lock PM inputs if not required
+    if (!statusObj.reqPM) {
+        aIn.classList.add('opacity-30', 'pointer-events-none');
+        aOut.classList.add('opacity-30', 'pointer-events-none');
+    }
+    // Fade out entirely if neither are required
+    if (!statusObj.reqAM && !statusObj.reqPM) {
         editorTimeInputs.classList.add('opacity-30', 'pointer-events-none');
     }
 };
 
-// NEW: Triggered when a user physically taps a status button inside the modal
 window.selectEditorStatus = (statusId) => {
     updateEditorStatusUI(statusId);
     
-    // Clear irrelevant times out of the boxes upon manual selection
     const statusObj = settings.statuses.find(s => s.id === statusId);
-    if (statusObj && statusObj.requiresTime) {
-        if (statusObj.id === 'halfday_am') {
-            inputSetters['afternoonIn'](''); inputSetters['afternoonOut']('');
-        } else if (statusObj.id === 'halfday_pm') {
-            inputSetters['morningIn'](''); inputSetters['morningOut']('');
-        }
-    } else if (statusObj && !statusObj.requiresTime) {
-        inputSetters['morningIn'](''); inputSetters['morningOut']('');
-        inputSetters['afternoonIn'](''); inputSetters['afternoonOut']('');
+    // Erase specific times if the user selects a status that doesn't need them
+    if (statusObj) {
+        if (!statusObj.reqAM) { inputSetters['morningIn'](''); inputSetters['morningOut'](''); }
+        if (!statusObj.reqPM) { inputSetters['afternoonIn'](''); inputSetters['afternoonOut'](''); }
     }
     
-    hideModal(); // Close the modal instantly
+    hideModal(); 
 };
 
 const renderEditorPage = () => {
@@ -1632,7 +1612,7 @@ const calculateSalaryForDay = (log, dateStr) => {
 
     // SMART SALARY ENGINE
     // If it's an official status that doesn't require time logs (like Vacation Leave or Absent)
-    if (!statusObj.requiresTime) {
+    if (!statusObj.reqAM && !statusObj.reqPM){
         if (statusObj.isPaid) {
             return { pay: settings.dailySalary, deductions: 0, status: statusObj.name }; // Full Pay!
         } else {
@@ -1830,28 +1810,40 @@ const renderSalaryPage = () => {
 };
 
 // --- STATUS MANAGER UI ---
+// --- STATUS MANAGER UI ---
 const renderStatusList = () => {
     const list = document.getElementById('settings-status-list');
-    list.innerHTML = settings.statuses.map((s, index) => `
-        <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg">
-            <div class="flex items-center gap-2 flex-1">
-                <div class="flex flex-col gap-0.5 mr-1">
-                    <button type="button" onclick="moveStatus(${index}, -1)" class="text-slate-400 hover:text-slate-600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
-                    <button type="button" onclick="moveStatus(${index}, 1)" class="text-slate-400 hover:text-slate-600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
-                </div>
-                <div>
-                    <div class="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-none">${s.name}</div>
-                    <div class="text-[10px] text-slate-500">${s.requiresTime ? 'Requires Time' : 'Full Day Flag'}</div>
+    if (!list) return;
+
+    list.innerHTML = settings.statuses.map((s, index) => {
+        // Generate beautiful little indicator badges
+        const paidBadge = s.isPaid ? '<span class="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded uppercase">Paid</span>' : '<span class="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded uppercase">Unpaid</span>';
+        const amBadge = s.reqAM ? '<span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">AM Log</span>' : '<span class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">No AM</span>';
+        const pmBadge = s.reqPM ? '<span class="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">PM Log</span>' : '<span class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">No PM</span>';
+
+        return `
+        <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 rounded-2xl transition-all">
+            
+            <!-- Order Arrows -->
+            <div class="flex flex-col gap-1 shrink-0">
+                <button type="button" onclick="moveStatus(${index}, -1)" class="text-slate-400 hover:text-primary-500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+                <button type="button" onclick="moveStatus(${index}, 1)" class="text-slate-400 hover:text-primary-500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+            </div>
+
+            <!-- Clickable Info Area -->
+            <div class="flex-1 cursor-pointer" onclick="openStatusEditor(${index})">
+                <div class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">${s.name}</div>
+                <div class="flex gap-1.5 text-[9px] font-bold tracking-wider">
+                    ${paidBadge} ${amBadge} ${pmBadge}
                 </div>
             </div>
-            <div class="flex items-center gap-3">
-                <button type="button" onclick="toggleStatusPaid(${index})" class="text-[10px] font-bold px-2 py-1 rounded ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                    ${s.isPaid ? 'PAID' : 'UNPAID'}
-                </button>
-                ${s.id !== 'regular' ? `<button type="button" onclick="deleteStatus(${index})" class="text-red-400 hover:text-red-600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>` : '<div class="w-4"></div>'}
+
+            <!-- Delete Button (Hide for Regular) -->
+            <div class="shrink-0">
+                ${s.id !== 'regular' ? `<button type="button" onclick="deleteStatus(${index})" class="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>` : '<div class="w-9"></div>'}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 };
 
 window.moveStatus = (index, dir) => {
@@ -1862,35 +1854,95 @@ window.moveStatus = (index, dir) => {
     renderStatusList();
 };
 
-window.toggleStatusPaid = (index) => {
-    settings.statuses[index].isPaid = !settings.statuses[index].isPaid;
-    renderStatusList();
-};
-
 window.deleteStatus = (index) => {
-    settings.statuses.splice(index, 1);
-    renderStatusList();
+    showModal('Delete Status', `Are you sure you want to delete "${settings.statuses[index].name}"?`, 'confirm', () => {
+        settings.statuses.splice(index, 1);
+        renderStatusList();
+    });
 };
 
-document.getElementById('btn-add-status').addEventListener('click', () => {
-    const input = document.getElementById('new-status-name');
-    const name = input.value.trim();
-    if (name) {
-        settings.statuses.push({
-            id: 'custom_' + Date.now(),
-            name: name,
-            isPaid: false,
-            requiresTime: false
-        });
-        input.value = '';
+// --- NEW: Interactive Status Editor Modal ---
+window.openStatusEditor = (index = -1) => {
+    const isNew = index === -1;
+    const s = isNew ? { name: '', isPaid: false, reqAM: true, reqPM: true } : settings.statuses[index];
+
+    // Build the interactive form for the modal
+    const html = `
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Status Name</label>
+                <input type="text" id="modal-status-name" value="${s.name}" placeholder="e.g. WFH (Morning Only)" class="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none focus:border-primary-500">
+            </div>
+            
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700 space-y-3">
+                
+                <div class="flex items-center justify-between">
+                    <div class="text-sm font-semibold dark:text-white">Is this a Paid status?</div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-status-paid" class="sr-only peer" ${s.isPaid ? 'checked' : ''}>
+                        <div class="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                    </label>
+                </div>
+
+                <hr class="border-slate-200 dark:border-slate-700">
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold dark:text-white">Require Morning Log</div>
+                        <div class="text-[10px] text-slate-500">User must clock in/out for AM</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-status-am" class="sr-only peer" ${s.reqAM ? 'checked' : ''}>
+                        <div class="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold dark:text-white">Require Afternoon Log</div>
+                        <div class="text-[10px] text-slate-500">User must clock in/out for PM</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-status-pm" class="sr-only peer" ${s.reqPM ? 'checked' : ''}>
+                        <div class="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    `;
+
+    showModal(isNew ? 'Create New Status' : 'Edit Status', html, 'confirm', () => {
+        const nameVal = document.getElementById('modal-status-name').value.trim();
+        if (!nameVal) {
+            showToast('Status name cannot be empty', 'error');
+            return;
+        }
+
+        const updatedStatus = {
+            id: isNew ? 'custom_' + Date.now() : s.id,
+            name: nameVal,
+            isPaid: document.getElementById('modal-status-paid').checked,
+            reqAM: document.getElementById('modal-status-am').checked,
+            reqPM: document.getElementById('modal-status-pm').checked
+        };
+
+        if (isNew) {
+            settings.statuses.push(updatedStatus);
+        } else {
+            settings.statuses[index] = updatedStatus;
+        }
         renderStatusList();
-    }
-});
+    });
+};
 
 // --- PAGE: SETTINGS ---
 
 const renderSettingsPage = () => {
-    settingTheme.value = settings.theme || 'light'; 
+    if (settingUsername) settingUsername.value = currentUsername; 
+
+    // FIX: Check the toggle if the theme is dark
+    if (settingTheme) settingTheme.checked = (settings.theme === 'dark'); 
+    
     settingDailySalary.value = settings.dailySalary;
     settingDeduction.value = settings.deductionPerMinute;
     settingMorningLate.value = settings.morningLateThreshold;
@@ -1904,8 +1956,15 @@ const renderSettingsPage = () => {
 };
 const handleSettingsSave = (e) => {
     e.preventDefault();
+
+    if (settingUsername && settingUsername.value.trim() !== '') {
+        currentUsername = settingUsername.value.trim();
+        localStorage.setItem(USERNAME_KEY, currentUsername);
+        updateLiveClock(); // Instantly update the greeting in the header!
+    }
     
-    settings.theme = settingTheme.value;
+   // FIX: Save 'dark' if checked, 'light' if unchecked
+    settings.theme = settingTheme.checked ? 'dark' : 'light';
     settings.dailySalary = parseFloat(settingDailySalary.value) || 0;
     settings.deductionPerMinute = parseFloat(settingDeduction.value) || 0;
     settings.morningLateThreshold = settingMorningLate.value;
@@ -2134,9 +2193,9 @@ const attachEventListeners = () => {
     
     settingsForm.addEventListener('submit', handleSettingsSave);
     
-    // NEW: Instantly preview theme when dropdown changes
+   // FIX: Instantly preview theme when toggle changes
     settingTheme.addEventListener('change', (e) => {
-        applyTheme(e.target.value);
+        applyTheme(e.target.checked ? 'dark' : 'light');
     });
 };
 
