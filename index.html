@@ -662,8 +662,8 @@
             </button>
         </div>
 
-        <!-- THE 9:16 CAPTURE AREA (Strict dimensions so it perfectly fits IG/FB Stories) -->
-        <div id="story-capture-area" class="w-[320px] h-[568px] sm:w-[360px] sm:h-[640px] bg-black text-white p-8 flex flex-col relative overflow-hidden shadow-2xl rounded-2xl shrink-0" style="background-color: #000000;">
+       <!-- THE 9:16 CAPTURE AREA (Transparent Background) -->
+        <div id="story-capture-area" class="w-[320px] h-[568px] sm:w-[360px] sm:h-[640px] text-white p-8 flex flex-col relative overflow-hidden shadow-2xl rounded-2xl shrink-0">
             <!-- Top -->
             <div class="mt-4 sm:mt-8 relative z-10">
                 <div id="story-date" class="text-slate-300 text-xs sm:text-sm mb-1 font-medium tracking-wide"></div>
@@ -671,10 +671,12 @@
                 <div id="story-content-area" class="space-y-4"></div>
             </div>
 
-            <!-- Footer (Signature) -->
-            <div class="absolute bottom-6 sm:bottom-8 right-6 sm:right-8 flex items-center gap-2.5 z-10 opacity-90">
+           <!-- Footer (Signature) -->
+            <div class="absolute bottom-12 sm:bottom-12 right-6 sm:right-8 flex items-center gap-1.5 z-10 opacity-90">
+                <!-- Removed the -mr-2 negative margin -->
                 <img src="Expressions/Deery_myday.png" id="story-footer-icon" class="w-10 h-10 object-contain drop-shadow-lg" alt="Deery">
-                <div class="text-[11px] sm:text-xs font-medium tracking-wide text-slate-200">Tracked by <span class="font-extrabold text-white">Deery</span></div>
+               <!-- Added mt-1 to nudge the text downward -->
+                <div class="text-[11px] sm:text-xs font-medium tracking-wide text-slate-200 mt-1">Tracked by <span class="font-extrabold text-white">Deery</span></div>
             </div>
             
             <!-- Subtle Background Glow -->
