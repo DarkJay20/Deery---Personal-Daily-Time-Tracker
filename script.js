@@ -2389,6 +2389,181 @@ const checkForgotClockOut = () => {
     }
 };
 
+// --- STORY GENERATOR ENGINE ---
+const storyBackdrop = document.getElementById('story-modal-backdrop');
+const storyCaptureArea = document.getElementById('story-capture-area');
+const storyDate = document.getElementById('story-date');
+const storyTitle = document.getElementById('story-title');
+const storyContentArea = document.getElementById('story-content-area');
+
+window.openStoryModal = () => {
+    storyBackdrop.classList.remove('hidden');
+    requestAnimationFrame(() => storyBackdrop.classList.remove('opacity-0'));
+    renderStoryVariation('summary'); // Default view
+};
+
+window.closeStoryModal = () => {
+    storyBackdrop.classList.add('opacity-0');
+    setTimeout(() => storyBackdrop.classList.add('hidden'), 300);
+};
+
+window.renderStoryVariation = (type) => {
+    // UI Tab highlighting
+    document.querySelectorAll('.story-tab').forEach(tab => {
+        tab.classList.remove('bg-white', 'text-slate-900');
+        tab.classList.add('bg-white/10', 'text-white');
+    });
+    
+    // FIX: Safely select the active tab without relying on the global 'event'
+    const activeTab = document.querySelector(`.story-tab[onclick*="${type}"]`);
+    if (activeTab) {
+        activeTab.classList.remove('bg-white/10', 'text-white');
+        activeTab.classList.add('bg-white', 'text-slate-900');
+    }
+
+    // Gather Today's Data
+    const today = new Date();
+    const todayStr = getISODate(today);
+    const log = getLog(todayStr);
+    
+    // Set formatted Date
+    storyDate.textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    let html = '';
+
+    if (type === 'summary') {
+        storyTitle.innerHTML = "Workday<br>Insights";
+        const hours = log ? calculateHours(log) : "0.00";
+        const mIn = log && log.morningIn ? formatTime12Hour(log.morningIn) : "--:--";
+        const aOut = log && log.afternoonOut ? formatTime12Hour(log.afternoonOut) : "--:--";
+
+        html = `
+            <div class="text-[15px] sm:text-base mb-1 tracking-wide">
+                <span class="font-extrabold text-white">Total Hours Worked :</span> 
+                <span class="text-slate-300">${hours} hrs</span>
+            </div>
+            <div class="text-[13px] sm:text-sm text-slate-400 font-medium tracking-wide">
+                Time In ${mIn} &nbsp;&bull;&nbsp; Time Out ${aOut}
+            </div>
+        `;
+    }
+    else if (type === 'earnings') {
+        storyTitle.innerHTML = "Daily<br>Earnings";
+        const salary = calculateSalaryForDay(log, todayStr);
+        
+        html = `
+            <div class="text-[13px] sm:text-sm text-slate-400 font-medium tracking-wide mb-1">You earned today</div>
+            <div class="text-4xl sm:text-5xl font-extrabold text-green-400 mb-6 drop-shadow-md tracking-tight">₱ ${salary.pay.toFixed(2)}</div>
+            
+            <div class="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block backdrop-blur-sm">
+                <div class="text-[11px] sm:text-xs text-red-300 font-bold uppercase tracking-widest mb-1">Deductions</div>
+                <div class="text-lg font-bold text-white">- ₱ ${salary.deductions.toFixed(2)}</div>
+            </div>
+        `;
+    }
+    else if (type === 'consistency') {
+        storyTitle.innerHTML = "Weekly<br>Streak";
+        
+        // Calculate Week Stats
+        let daysLogged = 0;
+        let lates = 0;
+        for(let i=0; i<7; i++) {
+            const d = new Date(); d.setDate(d.getDate() - i);
+            const dStr = getISODate(d);
+            if (isWorkDay(dStr)) {
+                const l = getLog(dStr);
+                if (l && calculateHours(l) > 0) daysLogged++;
+                if (l && (isLate(l.morningIn, settings.morningLateThreshold) || isLate(l.afternoonIn, settings.afternoonLateThreshold))) lates++;
+            }
+        }
+
+        html = `
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-extrabold text-white">${daysLogged} Days</div>
+                    <div class="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">Logged this week</div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl ${lates === 0 ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'} flex items-center justify-center border">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-extrabold text-white">${lates} Lates</div>
+                    <div class="text-[11px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">Recorded this week</div>
+                </div>
+            </div>
+        `;
+    }
+    else if (type === 'alert') {
+        storyTitle.innerHTML = "Daily<br>Status";
+        const lateMin = log ? calculateLateMinutes(log) : 0;
+        const underMin = log ? calculateUndertimeMinutes(log) : 0;
+        const totalAlerts = lateMin + underMin;
+
+        if (totalAlerts > 0) {
+            html = `
+                <div class="text-rose-400 text-lg font-bold mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Attention Needed
+                </div>
+                ${lateMin > 0 ? `<div class="text-[15px] sm:text-base text-slate-300 tracking-wide mb-1">Late today: <span class="font-bold text-white">${lateMin} mins</span></div>` : ''}
+                ${underMin > 0 ? `<div class="text-[15px] sm:text-base text-slate-300 tracking-wide">Undertime: <span class="font-bold text-white">${underMin} mins</span></div>` : ''}
+            `;
+        } else if (log && calculateHours(log) >= 8) {
+            html = `
+                <div class="text-green-400 text-lg font-bold mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Perfect Attendance!
+                </div>
+                <div class="text-[15px] sm:text-base text-slate-300 tracking-wide">No lates or undertimes recorded today. Great job!</div>
+            `;
+        } else {
+             html = `
+                <div class="text-slate-400 text-[15px] sm:text-base tracking-wide">Shift is still ongoing or incomplete. Finish your logs to see status!</div>
+            `;
+        }
+    }
+
+    storyContentArea.innerHTML = html;
+};
+
+window.downloadStory = () => {
+    // Show a loading toast
+    showToast("Generating high-res image...", "info");
+    
+    // Temporarily remove border-radius so the saved PNG has perfectly square corners
+    storyCaptureArea.classList.remove('rounded-2xl');
+
+    html2canvas(storyCaptureArea, {
+        scale: 3, // Multiplies resolution for super crisp text
+        backgroundColor: "#000000",
+        useCORS: true, 
+        logging: false
+    }).then(canvas => {
+        // Put the rounded corners back on the UI preview
+        storyCaptureArea.classList.add('rounded-2xl');
+        
+        // FIX: Bulletproof Download Trigger (Works on all browsers/devices)
+        const link = document.createElement('a');
+        link.download = `Deery_Story_${getISODate(new Date())}.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link); // Required for Firefox/Safari
+        link.click();
+        document.body.removeChild(link); // Clean up after download
+        
+        showToast("Story exported to your gallery!", "success");
+    }).catch(err => {
+        storyCaptureArea.classList.add('rounded-2xl');
+        showToast("Error generating image.", "danger");
+        console.error("Story Export Error:", err);
+    });
+};
+
 const attachEventListeners = () => {
     navLinks.forEach(link => {
         link.addEventListener('click', () => {
