@@ -286,7 +286,6 @@ const getOrCreateLog = (date) => {
 const checkOnboarding = () => {
     const savedName = localStorage.getItem(USERNAME_KEY);
     if (!savedName) {
-        // Show Onboarding
         pageOnboarding.classList.remove('hidden');
         if (bottomNav) bottomNav.classList.add('hidden');
         document.getElementById('main-container').classList.add('hidden');
@@ -298,7 +297,6 @@ const checkOnboarding = () => {
                 localStorage.setItem(USERNAME_KEY, name);
                 currentUsername = name;
                 
-                // Hide Onboarding & Show App
                 pageOnboarding.classList.add('opacity-0');
                 setTimeout(() => {
                     pageOnboarding.classList.add('hidden');
@@ -306,14 +304,19 @@ const checkOnboarding = () => {
                     document.getElementById('main-container').classList.remove('hidden');
                     updateLiveClock(); 
                     updateDeeryAvatar();
+                    
+                    // FIX: Trigger greeting right after they finish Onboarding!
+                    setTimeout(() => triggerStartupGreeting(), 800); 
                 }, 300);
             }
         });
     } else {
         currentUsername = savedName;
-        // FIX: Ensure nav and main container are visible if name already exists
         if (bottomNav) bottomNav.classList.remove('hidden');
         document.getElementById('main-container').classList.remove('hidden');
+        
+        // FIX: Trigger greeting normally if they are an existing user
+        setTimeout(() => triggerStartupGreeting(), 1500);
     }
 };
 
@@ -557,6 +560,158 @@ const showPage = (pageId) => {
 const attachSwipeNavigation = () => {
     // Swipe navigation has been disabled.
 };
+
+
+
+// --- DEERY INTERACTION ENGINE ---
+let deerySpeakTimeout;
+let deeryTypeInterval;
+let deeryAnimationTimeout; // <-- NEW: Prevents spam-click scrambling
+
+
+// Deery's Dictionary
+const DEERY_MESSAGES = {
+    greeting_morning: [
+        "Good morning, {name}! Ready to start your day?",
+        "Morning! Let’s keep things on track today.",
+        "Hope you’re feeling good today. Don’t forget to log in.",
+        "A fresh start. Let’s make today count."
+    ],
+    greeting_afternoon: [
+        "Good afternoon! How’s your day going so far?",
+        "You’re halfway through, keep it up.",
+        "Stay focused, you’re doing well."
+    ],
+    greeting_evening: [
+        "Good evening, {name}. Almost done for today?",
+        "Wrap things up nicely.",
+        "You’re close to finishing, keep going."
+    ],
+    missing_log: [
+        "You haven’t logged your time yet.",
+        "Just a reminder to update your log.",
+        "Your entry looks incomplete.",
+        "Don’t forget to log your time today.",
+        "It might be time to log in.",
+        "Quick check, have you recorded your time?"
+    ],
+    late: [
+        "Looks like you started a bit late.",
+        "Late kana {name}.",
+        "You logged in later than expected.",
+        "It happens—try to start earlier next time."
+    ],
+    undertime: [
+        "You ended earlier than usual.",
+        "Your work hours are a bit short today.",
+        "Try to complete your full hours if you can."
+    ],
+    early: [
+        "Wow, you're early! That's the perfect spirit, {name}!",
+        "Starting ahead of schedule. Great job!",
+        "You're here early! Let's get things done."
+    ],
+    motivation: [
+        "You’re doing well—keep it steady.",
+        "Consistency makes a big difference.",
+        "Small progress still counts.",
+        "You’re building a good routine.",
+        "Keep going, you’re on track.",
+        "Stay focused, you’ve got this."
+    ],
+    shift_complete: [
+        "All done for today. Good job, {name}.",
+        "You’ve completed your shift.",
+        "Everything’s logged. Nice work.",
+        "That’s a full day recorded.",
+        "You can relax now—well done."
+    ]
+};
+
+// Helper function to pick a random message and inject the username
+const getRandomDeeryMessage = (category) => {
+    const list = DEERY_MESSAGES[category];
+    if (!list || list.length === 0) return "...";
+    
+    let text = list[Math.floor(Math.random() * list.length)];
+    const name = currentUsername || 'User';
+    return text.replace(/{name}/g, name);
+};
+
+const speakDeery = (message, duration = 6000) => {
+    const clockContainer = document.getElementById('clock-container');
+    const speechBubble = document.getElementById('deery-speech-bubble');
+    const speechText = document.getElementById('deery-speech-text');
+    
+    if (!clockContainer || !speechBubble || !speechText) return;
+
+    // FIX: Clear EVERYTHING if the user spam clicks
+    clearTimeout(deeryAnimationTimeout);
+    clearTimeout(deerySpeakTimeout);
+    clearInterval(deeryTypeInterval);
+    speechText.textContent = '';
+
+    clockContainer.classList.add('opacity-0');
+    
+    // Assign this to our new variable
+    deeryAnimationTimeout = setTimeout(() => {
+        clockContainer.classList.add('hidden');
+        speechBubble.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            speechBubble.classList.remove('opacity-0');
+        });
+        
+        let i = 0;
+        deeryTypeInterval = setInterval(() => {
+            speechText.textContent += message.charAt(i);
+            i++;
+            if (i >= message.length) {
+                clearInterval(deeryTypeInterval);
+                
+                deerySpeakTimeout = setTimeout(() => {
+                    closeDeerySpeech();
+                }, duration);
+            }
+        }, 35); 
+        
+    }, 300); 
+};
+
+const closeDeerySpeech = () => {
+    const clockContainer = document.getElementById('clock-container');
+    const speechBubble = document.getElementById('deery-speech-bubble');
+    
+    speechBubble.classList.add('opacity-0');
+    setTimeout(() => {
+        speechBubble.classList.add('hidden');
+        clockContainer.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            clockContainer.classList.remove('opacity-0');
+        });
+    }, 300);
+};
+
+// Start-Up Greeting Logic
+const triggerStartupGreeting = () => {
+    const hour = new Date().getHours();
+    const todayStr = getISODate(new Date());
+    const log = getLog(todayStr);
+    const name = currentUsername || "User";
+    
+    // Check if they are officially Absent today
+    if (log && log.status === 'absent') {
+        speakDeery(`Oh, you're absent today, ${name}? Make sure to rest well and take care!`, 6000);
+        return;
+    }
+    
+    // Standard Time-Based Greetings using dynamic arrays
+    if (hour < 12) speakDeery(getRandomDeeryMessage('greeting_morning'), 5000);
+    else if (hour < 18) speakDeery(getRandomDeeryMessage('greeting_afternoon'), 5000);
+    else speakDeery(getRandomDeeryMessage('greeting_evening'), 5000);
+};
+
+
 // --- PAGE: HOME (QUICK LOG) & LIVE DASHBOARD ---
 
 const updateLiveClock = () => {
@@ -624,14 +779,16 @@ const renderQuickLog = () => {
     let pmDone = !statusObj.reqPM || (log.afternoonIn && log.afternoonOut);
     let allDone = amDone && pmDone;
 
+    
     if (allDone) {
         quickLogCard.className = 'mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-700';
         const hours = calculateHours(log);
         quickLogContainer.innerHTML = `
             <div class="flex flex-col items-center justify-center py-2 animate-slideUpFade">
-                <div class="w-12 h-12 bg-green-500 dark:bg-green-600 text-white rounded-full flex items-center justify-center shadow-md mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
+                
+                <!-- NEW: Animated Done GIF -->
+                <img src="Icons/Done.gif" alt="Shift Complete" class="w-16 h-16 object-contain mb-1 drop-shadow-sm">
+                
                 <h3 class="text-lg font-bold text-green-800 dark:text-green-300">Shift Complete!</h3>
                 <p class="text-sm text-green-600 dark:text-green-400 mt-0.5 font-medium">You logged ${hours > 0 ? hours : '0.00'} hours today.</p>
             </div>
@@ -721,7 +878,41 @@ const handleQuickLog = (field) => {
     updateDeeryAvatar(); // Refresh Avatar since state might have changed
     
     showToast(`Logged ${field.replace(/([A-Z])/g, ' $1').trim()} at ${time}`);
-};
+
+    // --- NEW: DEERY SMART TRIGGERS ---
+    const statusId = log.status || 'regular';
+    const statusObj = settings.statuses.find(s => s.id === statusId) || settings.statuses[0];
+    
+    let amDone = !statusObj.reqAM || (log.morningIn && log.morningOut);
+    let pmDone = !statusObj.reqPM || (log.afternoonIn && log.afternoonOut);
+    
+    if (amDone && pmDone) {
+        // Shift Complete
+        speakDeery(getRandomDeeryMessage('shift_complete'), 7000);
+    }
+    else if (field === 'morningIn') {
+        const timeVal = parseTime(time);
+        const threshVal = parseTime(settings.morningLateThreshold);
+        
+        if (timeVal > threshVal) {
+            speakDeery(getRandomDeeryMessage('late'), 6000);
+        } else if (timeVal < threshVal - 30) {
+            speakDeery(getRandomDeeryMessage('early'), 6000);
+        } else {
+            speakDeery(`Morning In recorded! Have a great shift today.`, 4000);
+        }
+    } 
+    else if (field === 'afternoonIn') {
+        const timeVal = parseTime(time);
+        const threshVal = parseTime(settings.afternoonLateThreshold);
+        if (timeVal > threshVal) {
+            speakDeery(`Late from lunch break? Let's catch up on work!`, 5000);
+        } else {
+            speakDeery(`Welcome back! Let's finish the day strong.`, 4000);
+        }
+    }
+
+    };
 
 const renderTodaySalarySummary = () => {
     const today = getISODate(new Date());
@@ -1706,17 +1897,20 @@ const renderSalaryPage = () => {
         const log = getLog(dateStr);
         const daySalary = calculateSalaryForDay(log, dateStr);
         
-        if (daySalary.status === 'Present' || daySalary.status === 'Partial Day') {
-            total15thPay += daySalary.pay;
-            total15thDeductions += daySalary.deductions;
+        // Add up all pay and deductions automatically
+        total15thPay += daySalary.pay;
+        total15thDeductions += daySalary.deductions;
+        
+        // Count as a workday if you got paid OR if you logged hours
+        if (daySalary.pay > 0 || (log && calculateHours(log) > 0)) {
             workDays15th++;
         }
     }
-   salary15th.textContent = `PHP ${total15thPay.toFixed(2)}`;
-    // Shortened "total deductions" to "deductions" so it fits nicely
+    
+    salary15th.textContent = `PHP ${total15thPay.toFixed(2)}`;
     salary15thSummary.textContent = `${workDays15th} work days, PHP ${total15thDeductions.toFixed(2)} deductions.`;
 
-    // --- NEW: 16th to End of Month Cutoff ---
+    // 3. 16th to End of Month Cutoff
     let total16thPay = 0;
     let total16thDeductions = 0;
     let workDays16th = 0;
@@ -1728,9 +1922,10 @@ const renderSalaryPage = () => {
         const log = getLog(dateStr);
         const daySalary = calculateSalaryForDay(log, dateStr);
         
-        if (daySalary.status === 'Present' || daySalary.status === 'Partial Day') {
-            total16thPay += daySalary.pay;
-            total16thDeductions += daySalary.deductions;
+        total16thPay += daySalary.pay;
+        total16thDeductions += daySalary.deductions;
+        
+        if (daySalary.pay > 0 || (log && calculateHours(log) > 0)) {
             workDays16th++;
         }
     }
@@ -1738,17 +1933,15 @@ const renderSalaryPage = () => {
     salary16th.textContent = `PHP ${total16thPay.toFixed(2)}`;
     salary16thSummary.textContent = `${workDays16th} work days, PHP ${total16thDeductions.toFixed(2)} deductions.`;
 
-    // 4. Full Month (Formerly #3)
-    let totalMonthPay = 0;
-    let totalMonthDeductions = 0;
-    let workDaysMonth = 0;
-
-
+    // 4. Full Month (Calculated simply by adding the two cutoffs together)
+    let totalMonthPay = total15thPay + total16thPay;
+    let totalMonthDeductions = total15thDeductions + total16thDeductions;
+    let workDaysMonth = workDays15th + workDays16th;
     
     salaryMonth.textContent = `PHP ${totalMonthPay.toFixed(2)}`;
     salaryMonthSummary.textContent = `${workDaysMonth} work days, PHP ${totalMonthDeductions.toFixed(2)} total deductions.`;
 
-    // 4. Monthly History
+    // 5. Monthly History
     const history = getMonthlyHistory();
     if (history.length === 0) {
         salaryHistoryBody.innerHTML = `
@@ -1791,16 +1984,24 @@ const renderSalaryPage = () => {
                 const inputHtml = `
                     <p class="mb-2 dark:text-slate-300">Enter the actual net pay received for <strong>${monthName}</strong>:</p>
                     <input type="number" id="modal-input-salary" step="0.01" class="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-2xl shadow-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-primary-500 focus:border-primary-500" value="${currentVal}" placeholder="0.00">
+                    ${currentVal ? `<button type="button" onclick="document.getElementById('modal-input-salary').value = ''" class="mt-3 text-sm text-red-500 hover:text-red-600 dark:hover:text-red-400 font-semibold flex items-center gap-1 transition-colors outline-none"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Clear </button>` : ''}
                 `;
 
                 showModal('Set Actual Net Pay', inputHtml, 'confirm', () => {
                     const inputVal = document.getElementById('modal-input-salary').value;
-                    if (inputVal) {
+                    
+                    if (inputVal && inputVal.trim() !== '') {
                         if (!monthlyData[monthKey]) monthlyData[monthKey] = {};
                         monthlyData[monthKey].actualNetPay = parseFloat(inputVal);
-                        saveMonthlyData();
-                        renderSalaryPage(); 
+                    } else {
+                        // NEW LOGIC: If the input is empty, delete the record completely!
+                        if (monthlyData[monthKey]) {
+                            delete monthlyData[monthKey].actualNetPay;
+                        }
                     }
+                    
+                    saveMonthlyData();
+                    renderSalaryPage(); 
                 });
                 
                 setTimeout(() => document.getElementById('modal-input-salary')?.focus(), 200);
@@ -1985,95 +2186,69 @@ const handleSettingsSave = (e) => {
 };
 
 
-// --- SMART NOTIFICATION ENGINE ---
-const generateNotifications = () => {
-    const today = new Date();
-    const todayStr = getISODate(today);
+// --- SMART NOTIFICATION ENGINE (UPGRADED) ---
+
+const NOTIF_KEY = 'dtrAppNotifications';
+let notifications = [];
+
+// 1. Core State & Persistence
+const loadNotifications = () => {
+    const data = localStorage.getItem(NOTIF_KEY);
+    notifications = data ? JSON.parse(data) : [];
+};
+
+const saveNotifications = () => {
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications));
+};
+
+// 2. Add Notification (With Spam Protection & Push)
+const addNotification = (title, message, type = 'info', tag = null) => {
+    const todayStr = getISODate(new Date());
     
-    // If the user cleared notifications today, don't generate them again until tomorrow!
-    const lastClearedDate = localStorage.getItem('dtrAppClearedDate');
-    if (lastClearedDate === todayStr) return [];
-
-    const notes = [];
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const date = today.getDate();
-
-    // Modern SVG Icons
-    const iconDollar = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>`;
-    const iconCalendar = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
-    const iconClock = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
-    const iconAlert = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
-    const iconUserX = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>`;
-    const iconSun = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
-
-    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-    if (date === 14 || date === 15) {
-        notes.push({ title: 'Payday Approaching!', message: 'The 15th cutoff is here. Ensure your logs are accurate.', icon: iconDollar, bgClass: 'bg-green-100 dark:bg-green-900/30', textClass: 'text-green-600 dark:text-green-400' });
-    } else if (date === lastDayOfMonth - 1 || date === lastDayOfMonth) {
-        notes.push({ title: 'Month-End Payday!', message: 'The month is ending. Review your full month salary estimate.', icon: iconCalendar, bgClass: 'bg-green-100 dark:bg-green-900/30', textClass: 'text-green-600 dark:text-green-400' });
+    // SPAM PROTECTION: Don't add if a notification with this tag was already triggered today
+    if (tag && notifications.some(n => n.tag === tag && n.timestamp.startsWith(todayStr))) {
+        return; 
     }
 
-    let consecutiveLates = 0, consecutiveAbsences = 0, monthLates = 0, monthAbsences = 0;
-    for (let d = 1; d <= date; d++) {
-        const checkDateStr = getISODate(new Date(year, month, d));
-        if (isWorkDay(checkDateStr) && checkDateStr <= todayStr) {
-            const log = getLog(checkDateStr);
-            if (!log) {
-                if (checkDateStr < todayStr) { monthAbsences++; consecutiveAbsences++; consecutiveLates = 0; }
-            } else {
-               const currentStatus = log.status || 'regular';
-                const isLateDay = isLate(log.morningIn, settings.morningLateThreshold) || isLate(log.afternoonIn, settings.afternoonLateThreshold);
-                const isAbsentDay = currentStatus === 'absent';
+    const notif = {
+        id: Date.now(),
+        title,
+        message,
+        type,
+        tag,
+        read: false,
+        timestamp: new Date().toISOString()
+    };
 
-                if (isAbsentDay) { monthAbsences++; consecutiveAbsences++; consecutiveLates = 0; }
-                else if (isLateDay) { monthLates++; consecutiveLates++; consecutiveAbsences = 0; }
-                else { consecutiveLates = 0; consecutiveAbsences = 0; }
-            }
-        }
+    notifications.unshift(notif); // Add to top
+    saveNotifications();
+    renderNotifications();
+    
+    // OPTIONAL: Trigger Browser Push Notification
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body: message, icon: "Expressions/Deery_Normal.png" });
     }
+};
 
-    if (consecutiveLates >= 2) notes.push({ title: 'Consecutive Lates', message: `You have been late ${consecutiveLates} days in a row. Watch your deductions!`, icon: iconClock, bgClass: 'bg-orange-100 dark:bg-orange-900/30', textClass: 'text-orange-600 dark:text-orange-400' });
-    else if (monthLates >= 4) notes.push({ title: 'High Lates This Month', message: `You have ${monthLates} lates this month. Try to arrive early!`, icon: iconAlert, bgClass: 'bg-yellow-100 dark:bg-yellow-900/30', textClass: 'text-yellow-600 dark:text-yellow-400' });
+// 3. UI Updates (Badge & List)
+const updateNotificationBadge = () => {
+    const unreadCount = notifications.filter(n => !n.read).length;
 
-    if (consecutiveAbsences >= 2) notes.push({ title: 'Consecutive Absences', message: `You missed ${consecutiveAbsences} days in a row.`, icon: iconUserX, bgClass: 'bg-red-100 dark:bg-red-900/30', textClass: 'text-red-600 dark:text-red-400' });
-    else if (monthAbsences >= 3) notes.push({ title: 'Multiple Absences', message: `You have ${monthAbsences} absences this month.`, icon: iconAlert, bgClass: 'bg-red-100 dark:bg-red-900/30', textClass: 'text-red-600 dark:text-red-400' });
-
-    const currentHour = today.getHours();
-    if (isWorkDay(todayStr)) {
-        const currentLog = getLog(todayStr);
-        if (currentHour >= 8 && currentHour < 12 && (!currentLog || !currentLog.morningIn)) {
-             notes.push({ title: 'Morning In', message: `Don't forget to tap "Morning In" for today!`, icon: iconSun, bgClass: 'bg-blue-100 dark:bg-blue-900/30', textClass: 'text-blue-600 dark:text-blue-400' });
-        }
+    if (unreadCount > 0) {
+        notificationBadge.classList.remove('hidden');
+        notificationClearedIndicator.classList.add('hidden');
+        clearNotificationsBtn.classList.remove('hidden');
+    } else {
+        notificationBadge.classList.add('hidden');
+        notificationClearedIndicator.classList.remove('hidden');
+        clearNotificationsBtn.classList.add('hidden');
     }
-
-    return notes;
 };
 
 const renderNotifications = () => {
-    const notes = generateNotifications();
+    updateNotificationBadge();
 
-    if (notes.length > 0) {
-        notificationBadge.classList.remove('hidden'); // Show Red Dot
-        notificationClearedIndicator.classList.add('hidden'); // Hide Green Check
-        clearNotificationsBtn.classList.remove('hidden'); // Show "Clear All" button
-        
-        notificationList.innerHTML = notes.map(note => `
-            <div class="notification-card p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm flex gap-4 items-start hover:shadow-md transition-all duration-300 transform">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${note.bgClass} ${note.textClass}">
-                    ${note.icon}
-                </div>
-                <div class="flex-1">
-                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">${note.title}</h4>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">${note.message}</p>
-                </div>
-            </div>
-        `).join('');
-    } else {
-        notificationBadge.classList.add('hidden'); // Hide Red Dot
-        notificationClearedIndicator.classList.remove('hidden'); // Show Green Check Indicator
-        clearNotificationsBtn.classList.add('hidden'); // Hide "Clear All" button
-        
+    if (notifications.length === 0) {
         notificationList.innerHTML = `
             <div class="flex flex-col items-center justify-center h-full min-h-[250px] text-slate-400 dark:text-slate-500 animate-slideUpFade">
                 <div class="w-16 h-16 bg-green-50 dark:bg-green-900/20 text-green-500 rounded-full flex items-center justify-center mb-4">
@@ -2083,25 +2258,56 @@ const renderNotifications = () => {
                 <p class="text-xs mt-1">No new alerts or reminders.</p>
             </div>
         `;
+        return;
+    }
+
+    // Icon & Color Dictionary
+    const styles = {
+        info: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` },
+        warning: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-600 dark:text-orange-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>` },
+        danger: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>` },
+        success: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>` }
+    };
+
+    notificationList.innerHTML = notifications.map(n => {
+        const style = styles[n.type] || styles.info;
+        const opacityClass = n.read ? 'opacity-50' : 'opacity-100';
+        const unreadDot = n.read ? '' : `<div class="absolute top-4 right-4 w-2 h-2 bg-red-500 rounded-full"></div>`;
+        
+        // Format time nicely
+        const timeString = new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        return `
+            <div onclick="markAsRead(${n.id})" class="relative notification-card p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm flex gap-4 items-start cursor-pointer hover:shadow-md transition-all duration-300 ${opacityClass}">
+                ${unreadDot}
+                <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${style.bg} ${style.text}">
+                    ${style.icon}
+                </div>
+                <div class="flex-1 pr-3">
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">${n.title}</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">${n.message}</p>
+                    <div class="text-[9px] text-slate-400 mt-2 font-medium tracking-wider">${timeString}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+};
+
+// 4. Mark Read / Clear
+window.markAsRead = (id) => {
+    const notif = notifications.find(n => n.id === id);
+    if (notif && !notif.read) {
+        notif.read = true;
+        saveNotifications();
+        renderNotifications();
     }
 };
 
 const handleClearNotifications = () => {
-    // 1. Save clearance state for today
-    const todayStr = getISODate(new Date());
-    localStorage.setItem('dtrAppClearedDate', todayStr);
-    
-    // 2. Play a swift slide-out animation on all cards
-    const cards = document.querySelectorAll('.notification-card');
-    cards.forEach(card => {
-        card.style.transform = 'translateX(120%)';
-        card.style.opacity = '0';
-    });
-    
-    // 3. Re-render to show the empty state after animation finishes
-    setTimeout(() => {
-        renderNotifications();
-    }, 250);
+    // "Clear All" now marks all as read, rather than deleting them
+    notifications.forEach(n => n.read = true);
+    saveNotifications();
+    renderNotifications();
 };
 
 const toggleNotificationPanel = () => {
@@ -2119,6 +2325,47 @@ const toggleNotificationPanel = () => {
         setTimeout(() => notificationOverlay.classList.add('hidden'), 300);
     }
 };
+
+// 5. Smart Triggers (Runs in background)
+const runSmartTriggers = () => {
+    const today = new Date();
+    const todayStr = getISODate(today);
+    const currentHour = today.getHours();
+    
+    // A. Ask for push permission
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
+
+    if (!isWorkDay(todayStr)) return;
+
+    const log = getLog(todayStr);
+    const statusId = log ? (log.status || 'regular') : 'regular';
+    const statusObj = settings.statuses.find(s => s.id === statusId) || settings.statuses[0];
+
+    // B. Missing Morning In Reminder (Triggers after 9 AM if AM log is required)
+    if (statusObj.reqAM && currentHour >= 9 && (!log || !log.morningIn)) {
+        addNotification("Morning In Reminder", "Don't forget to log your Morning In time!", "info", "missing_am_log");
+    }
+
+    // C. Late Warning
+    if (log && log.morningIn && isLate(log.morningIn, settings.morningLateThreshold)) {
+        addNotification("Late Alert", "You clocked in late this morning. Watch your deductions!", "warning", "late_alert_am");
+    }
+
+    // D. Daily Salary Summary (Triggers after 5 PM if shift is complete)
+    if (log && currentHour >= 17) {
+        const amDone = !statusObj.reqAM || (log.morningIn && log.morningOut);
+        const pmDone = !statusObj.reqPM || (log.afternoonIn && log.afternoonOut);
+        if (amDone && pmDone) {
+            const { pay, deductions } = calculateSalaryForDay(log, todayStr);
+            addNotification("Shift Completed", `Great job today! You earned an estimated PHP ${pay.toFixed(2)} with PHP ${deductions.toFixed(2)} in deductions.`, "success", "daily_summary");
+        }
+    }
+};
+
+
+
 // --- INITIALIZATION ---
 
 const checkForgotClockOut = () => {
@@ -2193,9 +2440,14 @@ const attachEventListeners = () => {
     
     settingsForm.addEventListener('submit', handleSettingsSave);
     
-   // FIX: Instantly preview theme when toggle changes
+  // FIX: Instantly preview and auto-save theme when toggle changes
     settingTheme.addEventListener('change', (e) => {
-        applyTheme(e.target.checked ? 'dark' : 'light');
+        const selectedTheme = e.target.checked ? 'dark' : 'light';
+        applyTheme(selectedTheme);
+        
+        // Auto-save the choice immediately so it remembers!
+        settings.theme = selectedTheme;
+        saveSettings();
     });
 };
 
@@ -2204,9 +2456,20 @@ const init = () => {
     loadMonthlyData(); 
     loadLogs();
     
+    // NEW: Load saved notifications
+    loadNotifications(); 
+    
     checkOnboarding(); 
 
     attachEventListeners();
+   // Make Avatar Clickable for Random Motivation!
+    if (mainDeeryImg) {
+        mainDeeryImg.classList.add('cursor-pointer');
+        mainDeeryImg.addEventListener('click', () => {
+             // Pulls a random message from the 'motivation' array in your dictionary!
+             speakDeery(getRandomDeeryMessage('motivation'), 4500);
+        });
+    }
     attachSwipeNavigation(); 
     setupDateFilters(); 
     renderNotifications();
@@ -2216,7 +2479,17 @@ const init = () => {
     updateDeeryAvatar(); 
     setInterval(updateLiveClock, 1000);
     
+    // NEW: Run smart triggers immediately on load
+    runSmartTriggers();
+    
+    // NEW: Start the background scheduler (Runs every 10 minutes)
+    setInterval(() => {
+        runSmartTriggers();
+    }, 10 * 60 * 1000);
+    
     setTimeout(checkForgotClockOut, 1000); 
+
+   
 };
 
 document.addEventListener('DOMContentLoaded', init);
