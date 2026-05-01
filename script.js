@@ -81,6 +81,12 @@ const statsHours = document.getElementById('stats-hours');
 const statsLates = document.getElementById('stats-lates');
 const statsUndertimes = document.getElementById('stats-undertimes');
 const statsAbsences = document.getElementById('stats-absences');
+// Analytics Elements
+const toggleDataViewBtn = document.getElementById('toggle-data-view');
+const toggleAnalyticsViewBtn = document.getElementById('toggle-analytics-view');
+const historyDataView = document.getElementById('history-data-view');
+const historyAnalyticsView = document.getElementById('history-analytics-view');
+let chartFinanceInst, chartHoursInst, chartAttendanceInst, chartPenaltiesInst;
 
 // View Toggle Elements
 const viewToggleTable = document.getElementById('view-toggle-table');
@@ -116,6 +122,8 @@ const settingAfternoonLate = document.getElementById('setting-afternoon-late');
 const settingMorningUndertime = document.getElementById('setting-morning-undertime');
 const settingAfternoonUndertime = document.getElementById('setting-afternoon-undertime');
 const settingUndertimeDeduction = document.getElementById('setting-undertime-deduction');
+const settingQuickConfirm = document.getElementById('setting-quick-confirm');
+const settingsSaveBtn = document.getElementById('settings-save-btn');
 
 
 // --- HELPER FUNCTIONS ---
@@ -205,6 +213,7 @@ const loadSettings = () => {
         morningUndertimeThreshold: '12:00', 
         afternoonUndertimeThreshold: '17:00', 
         undertimeDeductionPerMinute: 1,
+        requireQuickLogConfirm: true,
         statuses: [
             { id: 'regular', name: 'Regular Work', isPaid: true, reqAM: true, reqPM: true },
             { id: 'wfh', name: 'Work From Home (WFH)', isPaid: true, reqAM: false, reqPM: false },
@@ -285,37 +294,149 @@ const getOrCreateLog = (date) => {
 
 const checkOnboarding = () => {
     const savedName = localStorage.getItem(USERNAME_KEY);
+    
     if (!savedName) {
+        // App UI hide
         pageOnboarding.classList.remove('hidden');
         if (bottomNav) bottomNav.classList.add('hidden');
         document.getElementById('main-container').classList.add('hidden');
-        
-        onboardingForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const name = onboardingNameInput.value.trim();
-            if (name) {
+
+        // Internal DOM Elements
+        const skipBtn = document.getElementById('onboarding-skip');
+        const nextBtn = document.getElementById('onboarding-next-btn');
+        const dotsContainer = document.getElementById('onboarding-dots');
+        const step1 = document.getElementById('onboarding-step-1');
+        const step2 = document.getElementById('onboarding-step-2');
+        const step3 = document.getElementById('onboarding-step-3');
+        const introImg = document.getElementById('intro-img');
+        const introTitle = document.getElementById('intro-title');
+        const introDesc = document.getElementById('intro-desc');
+        const nameInput = document.getElementById('onboarding-name');
+
+        // Carousel Content Dictionary
+        const introSlides = [
+            { img: 'Expressions/Deery_welcome.png', title: 'Welcome to Deery', desc: 'Track your time and earnings in one place, automatically.' },
+            { img: 'Expressions/Deery_tracking.png', title: 'Log with ease', desc: 'Quickly record your shifts. Deery calculates lates and undertimes for you.' },
+            { img: 'Expressions/Deery_analytics.png', title: 'Powerful Insights', desc: 'View monthly history, monitor your attendance streak, and estimate your net pay.' }
+        ];
+
+        let currentSlide = 0;
+        let currentStep = 1;
+
+        const updateCarousel = () => {
+            // 1. Smoothly fade out and push down/scale down
+            introImg.classList.add('opacity-0', 'scale-90');
+            introTitle.classList.add('opacity-0', 'translate-y-3');
+            introDesc.classList.add('opacity-0', 'translate-y-3');
+
+            setTimeout(() => {
+                // 2. Swap the text while hidden
+                introTitle.textContent = introSlides[currentSlide].title;
+                introDesc.textContent = introSlides[currentSlide].desc;
+
+                // 3. Swap the image, but WAIT for it to load before revealing
+                introImg.src = introSlides[currentSlide].img;
+                
+                introImg.onload = () => {
+                    // 4. Bring everything back in beautifully
+                    introImg.classList.remove('opacity-0', 'scale-90');
+                    introTitle.classList.remove('opacity-0', 'translate-y-3');
+                    introDesc.classList.remove('opacity-0', 'translate-y-3');
+                };
+            }, 300); // Wait 300ms for the fade-out to finish before swapping
+
+            // Update sliding dots indicator
+            Array.from(dotsContainer.children).forEach((dot, idx) => {
+                dot.className = idx === currentSlide 
+                    ? 'w-4 h-2 rounded-full bg-primary-600 transition-all duration-300' 
+                    : 'w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-700 transition-all duration-300';
+            });
+
+            nextBtn.textContent = currentSlide === introSlides.length - 1 ? "Let's get started" : "Next";
+        };
+
+        const slideToStep = (step) => {
+            currentStep = step;
+            
+           // Slide 1 (Carousel)
+            step1.className = `w-full flex flex-col items-center justify-center text-center transition-all duration-500 transform absolute inset-0 px-6 pb-24 ${step === 1 ? 'translate-x-0 opacity-100 pointer-events-auto' : '-translate-x-full opacity-0 pointer-events-none'}`;
+            
+            // Slide 2 (Name)
+            step2.className = `w-full flex flex-col items-center justify-center text-center transition-all duration-500 transform absolute inset-0 px-6 pb-24 ${step === 2 ? 'translate-x-0 opacity-100 pointer-events-auto' : (step < 2 ? 'translate-x-full opacity-0 pointer-events-none' : '-translate-x-full opacity-0 pointer-events-none')}`;
+            // Slide 3 (Settings)
+            step3.className = `w-full flex flex-col transition-all duration-500 transform absolute inset-0 pt-4 px-6 overflow-y-auto pb-32 no-scrollbar ${step === 3 ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-full opacity-0 pointer-events-none'}`;
+            
+            // UI Adjustments based on Step
+            if (step === 2) {
+                dotsContainer.classList.add('opacity-0');
+                skipBtn.classList.add('opacity-0', 'pointer-events-none');
+                nextBtn.textContent = "Continue";
+                setTimeout(() => nameInput.focus(), 600); // Auto-focus keyboard
+            } else if (step === 3) {
+                nextBtn.textContent = "Finish Setup";
+            }
+        };
+
+        // Handle Main Action Button
+        nextBtn.addEventListener('click', () => {
+            if (currentStep === 1) {
+                if (currentSlide < introSlides.length - 1) {
+                    currentSlide++;
+                    updateCarousel();
+                } else {
+                    slideToStep(2);
+                }
+            } 
+            else if (currentStep === 2) {
+                if (!nameInput.value.trim()) {
+                    showToast('Please enter what we should call you.', 'error');
+                    nameInput.focus();
+                    return;
+                }
+                slideToStep(3);
+            } 
+            else if (currentStep === 3) {
+                // 1. Save Username
+                const name = nameInput.value.trim();
                 localStorage.setItem(USERNAME_KEY, name);
                 currentUsername = name;
+
+                // 2. Save Settings
+                settings.dailySalary = parseFloat(document.getElementById('onboarding-salary').value) || 0;
+                settings.deductionPerMinute = parseFloat(document.getElementById('onboarding-late-pen').value) || 0;
+                settings.undertimeDeductionPerMinute = parseFloat(document.getElementById('onboarding-under-pen').value) || 0;
+                settings.morningLateThreshold = document.getElementById('onboarding-time-in').value || '08:00';
+                settings.afternoonUndertimeThreshold = document.getElementById('onboarding-time-out').value || '17:00';
                 
+                saveSettings();
+                
+                // 3. Exit Onboarding and Start App
                 pageOnboarding.classList.add('opacity-0');
                 setTimeout(() => {
                     pageOnboarding.classList.add('hidden');
                     if (bottomNav) bottomNav.classList.remove('hidden');
                     document.getElementById('main-container').classList.remove('hidden');
+                    
                     updateLiveClock(); 
+                    renderSettingsPage(); 
                     updateDeeryAvatar();
                     
-                    // FIX: Trigger greeting right after they finish Onboarding!
                     setTimeout(() => triggerStartupGreeting(), 800); 
-                }, 300);
+                }, 400);
             }
         });
+
+        // Handle Skip Button
+        skipBtn.addEventListener('click', () => slideToStep(2));
+
+        // Start the engine
+        updateCarousel();
+
     } else {
+        // Normal Boot for Returning Users
         currentUsername = savedName;
         if (bottomNav) bottomNav.classList.remove('hidden');
         document.getElementById('main-container').classList.remove('hidden');
-        
-        // FIX: Trigger greeting normally if they are an existing user
         setTimeout(() => triggerStartupGreeting(), 1500);
     }
 };
@@ -625,6 +746,12 @@ const DEERY_MESSAGES = {
         "Everything’s logged. Nice work.",
         "That’s a full day recorded.",
         "You can relax now—well done."
+    ],
+    sleepy_disturbed: [
+        "Please don't disturb me... get back to sleep.",
+        "Five more minutes... please, {name}.",
+        "It's too late for this. Sleep time...",
+        "Zzz... why are we awake, {name}? Go to bed."
     ]
 };
 
@@ -784,13 +911,20 @@ const renderQuickLog = () => {
         quickLogCard.className = 'mt-2 mb-2 p-3 sm:p-5 rounded-2xl shadow-sm border transition-colors duration-300 bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-700';
         const hours = calculateHours(log);
         quickLogContainer.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-2 animate-slideUpFade">
+            <div class="flex flex-col items-center justify-center py-2 animate-slideUpFade w-full">
                 
-                <!-- NEW: Animated Done GIF -->
+                <!-- Animated Done GIF -->
                 <img src="Icons/Done.gif" alt="Shift Complete" class="w-16 h-16 object-contain mb-1 drop-shadow-sm">
                 
                 <h3 class="text-lg font-bold text-green-800 dark:text-green-300">Shift Complete!</h3>
-                <p class="text-sm text-green-600 dark:text-green-400 mt-0.5 font-medium">You logged ${hours > 0 ? hours : '0.00'} hours today.</p>
+                <p class="text-sm text-green-600 dark:text-green-400 mt-0.5 font-medium mb-2 text-center">You logged ${hours > 0 ? hours : '0.00'} hours today.</p>
+                
+                <!-- Native-App Style Clickable Text Link -->
+                <button onclick="openStoryModal()" class="group flex items-center justify-center gap-1.5 text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 transition-colors duration-200 active:scale-95 py-1.5 px-3 rounded-lg outline-none">
+                    
+                    <span class="text-xs sm:text-sm font-bold">Share your Daily Hustle</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-70 transform group-hover:translate-x-0.5 transition-transform"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
             </div>
         `;
         return; 
@@ -862,6 +996,45 @@ const renderQuickLog = () => {
 };
 
 const handleQuickLog = (field) => {
+    // If the setting is OFF, just log it immediately without asking
+    if (!settings.requireQuickLogConfirm) {
+        executeQuickLog(field);
+        return;
+    }
+
+    // Otherwise, build the confirmation modal!
+    const fieldName = field.replace(/([A-Z])/g, ' $1').trim(); 
+    const formattedName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+    
+    const now = new Date();
+    const formattedTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    // Custom Modal HTML with the "Don't ask again" checkbox
+    const html = `
+        <div class="mb-4">Are you sure you want to log your <b>${formattedName}</b> right now at <b>${formattedTime}</b>?</div>
+        
+        <label class="flex items-center gap-2.5 cursor-pointer mt-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+            <input type="checkbox" id="quick-log-dont-ask" class="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:bg-slate-700 dark:border-slate-600">
+            <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">Don't ask me again</span>
+        </label>
+    `;
+
+    showModal('Confirm Time Log', html, 'confirm', () => {
+        // If they checked the box, turn the setting off permanently!
+        const dontAsk = document.getElementById('quick-log-dont-ask').checked;
+        if (dontAsk) {
+            settings.requireQuickLogConfirm = false;
+            saveSettings();
+            if (settingQuickConfirm) settingQuickConfirm.checked = false; // Update UI silently
+        }
+        
+        // Proceed with logging
+        executeQuickLog(field);
+    });
+};
+
+// This is your original code, just renamed to 'executeQuickLog'!
+const executeQuickLog = (field) => {
     const now = new Date();
     const time = now.toTimeString().split(' ')[0].substring(0, 5); 
     const today = getISODate(now);
@@ -875,11 +1048,10 @@ const handleQuickLog = (field) => {
     renderStatistics();
     
     updateLiveClock();
-    updateDeeryAvatar(); // Refresh Avatar since state might have changed
+    updateDeeryAvatar(); 
     
     showToast(`Logged ${field.replace(/([A-Z])/g, ' $1').trim()} at ${time}`);
 
-    // --- NEW: DEERY SMART TRIGGERS ---
     const statusId = log.status || 'regular';
     const statusObj = settings.statuses.find(s => s.id === statusId) || settings.statuses[0];
     
@@ -887,7 +1059,6 @@ const handleQuickLog = (field) => {
     let pmDone = !statusObj.reqPM || (log.afternoonIn && log.afternoonOut);
     
     if (amDone && pmDone) {
-        // Shift Complete
         speakDeery(getRandomDeeryMessage('shift_complete'), 7000);
     }
     else if (field === 'morningIn') {
@@ -911,8 +1082,7 @@ const handleQuickLog = (field) => {
             speakDeery(`Welcome back! Let's finish the day strong.`, 4000);
         }
     }
-
-    };
+};
 
 const renderTodaySalarySummary = () => {
     const today = getISODate(new Date());
@@ -1250,7 +1420,12 @@ const setupDateFilters = () => {
     viewFilterYear.innerHTML = yearOptions;
 
     viewFilterMonth.addEventListener('change', () => { renderLogsTable(); renderCalendar(); renderStatistics(); });
-    viewFilterYear.addEventListener('change', () => { renderLogsTable(); renderCalendar(); renderStatistics(); });
+   viewFilterYear.addEventListener('change', () => { 
+        renderLogsTable(); 
+        renderCalendar(); 
+        renderStatistics(); 
+        if(!historyAnalyticsView.classList.contains('hidden')) renderAnalyticsDashboard(); 
+    });
 };
 
 const switchViewMode = (mode) => {
@@ -1286,6 +1461,132 @@ const switchViewMode = (mode) => {
         
         renderCalendar();
     }
+};
+
+const switchMasterView = (mode) => {
+    const activeClasses = ['bg-primary-600', 'text-white', 'shadow-sm'];
+    const inactiveClasses = ['text-slate-600', 'dark:text-slate-300', 'hover:text-slate-900'];
+
+    if (mode === 'data') {
+        historyDataView.classList.remove('hidden');
+        historyAnalyticsView.classList.add('hidden');
+        
+        toggleDataViewBtn.classList.add(...activeClasses);
+        toggleDataViewBtn.classList.remove(...inactiveClasses);
+        toggleAnalyticsViewBtn.classList.remove(...activeClasses);
+        toggleAnalyticsViewBtn.classList.add(...inactiveClasses);
+    } else {
+        historyDataView.classList.add('hidden');
+        historyAnalyticsView.classList.remove('hidden');
+        
+        toggleAnalyticsViewBtn.classList.add(...activeClasses);
+        toggleAnalyticsViewBtn.classList.remove(...inactiveClasses);
+        toggleDataViewBtn.classList.remove(...activeClasses);
+        toggleDataViewBtn.classList.add(...inactiveClasses);
+        
+        renderAnalyticsDashboard(); // Render charts when opened!
+    }
+};
+
+const renderAnalyticsDashboard = () => {
+    // 1. Gather Data based on selected year
+    const selectedYear = parseInt(viewFilterYear.value);
+    
+    const monthlyPay = Array(12).fill(0);
+    const monthlyDed = Array(12).fill(0);
+    const monthlyHours = Array(12).fill(0);
+    const monthlyLates = Array(12).fill(0);
+    const monthlyUnders = Array(12).fill(0);
+    const statusCounts = {};
+
+    logs.forEach(log => {
+        const [y, m, d] = log.date.split('-').map(Number);
+        if (y === selectedYear) {
+            const monthIdx = m - 1;
+            const salary = calculateSalaryForDay(log, log.date);
+            const hours = parseFloat(calculateHours(log));
+            
+            monthlyPay[monthIdx] += salary.pay;
+            monthlyDed[monthIdx] += salary.deductions;
+            monthlyHours[monthIdx] += hours;
+            
+            monthlyLates[monthIdx] += calculateLateMinutes(log);
+            monthlyUnders[monthIdx] += calculateUndertimeMinutes(log);
+            
+            if (isWorkDay(log.date)) {
+                const statusName = (settings.statuses.find(s => s.id === (log.status || 'regular')) || settings.statuses[0]).name;
+                statusCounts[statusName] = (statusCounts[statusName] || 0) + 1;
+            }
+        }
+    });
+
+    // Chart Global Settings
+    Chart.defaults.color = '#94a3b8'; // Slate-400 so it looks good in Dark/Light mode
+    Chart.defaults.font.family = "'Roboto', sans-serif";
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // 2. Chart 1: Financial Trends (Bar)
+    if (chartFinanceInst) chartFinanceInst.destroy();
+    chartFinanceInst = new Chart(document.getElementById('chartFinance'), {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                { label: 'Net Pay (PHP)', data: monthlyPay, backgroundColor: '#10b981', borderRadius: 4 },
+                { label: 'Deductions (PHP)', data: monthlyDed, backgroundColor: '#ef4444', borderRadius: 4 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
+
+    // 3. Chart 2: Time & Effort (Line)
+    if (chartHoursInst) chartHoursInst.destroy();
+    chartHoursInst = new Chart(document.getElementById('chartHours'), {
+        type: 'line',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Total Hours',
+                data: monthlyHours,
+                borderColor: '#178aff',
+                backgroundColor: 'rgba(23, 138, 255, 0.2)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
+
+    // 4. Chart 3: Attendance Breakdown (Donut)
+    if (chartAttendanceInst) chartAttendanceInst.destroy();
+    const statusLabels = Object.keys(statusCounts);
+    const statusData = Object.values(statusCounts);
+    // Cool gradient array for the pie slices
+    const pieColors = ['#178aff', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f43f5e', '#64748b'];
+    
+    chartAttendanceInst = new Chart(document.getElementById('chartAttendance'), {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels.length ? statusLabels : ['No Data'],
+            datasets: [{ data: statusData.length ? statusData : [1], backgroundColor: pieColors, borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } } }
+    });
+
+    // 5. Chart 4: Penalty Profiler (Horizontal Bar)
+    if (chartPenaltiesInst) chartPenaltiesInst.destroy();
+    chartPenaltiesInst = new Chart(document.getElementById('chartPenalties'), {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [
+                { label: 'Late (Mins)', data: monthlyLates, backgroundColor: '#f59e0b', borderRadius: 4 },
+                { label: 'Early Cut (Mins)', data: monthlyUnders, backgroundColor: '#f43f5e', borderRadius: 4 }
+            ]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, stacked: true }, y: { stacked: true } } }
+    });
 };
 
 const renderCalendar = () => {
@@ -1797,21 +2098,22 @@ const calculateSalaryForDay = (log, dateStr) => {
         return { pay: 0, deductions: 0, status: 'No Log (Absent)' };
     }
     
-    // FATAL CRASH FIX: Added "|| settings.statuses[0]" as a safe fallback!
     const statusObj = settings.statuses.find(s => s.id === (log.status || 'regular')) || settings.statuses[0];
     const hours = parseFloat(calculateHours(log));
+    
+    // FIX: Grab the multiplier (e.g., 2.0 for 200%), default to 1.0 (100%)
+    const payMultiplier = statusObj.payMultiplier || 1.0; 
 
     // SMART SALARY ENGINE
-    // If it's an official status that doesn't require time logs (like Vacation Leave or Absent)
     if (!statusObj.reqAM && !statusObj.reqPM){
         if (statusObj.isPaid) {
-            return { pay: settings.dailySalary, deductions: 0, status: statusObj.name }; // Full Pay!
+            // Full Day Special Pay (e.g., Unworked Holiday)
+            return { pay: (settings.dailySalary * payMultiplier), deductions: 0, status: statusObj.name }; 
         } else {
             return { pay: 0, deductions: 0, status: statusObj.name }; // No Pay
         }
     }
 
-    // Otherwise, calculate normally based on hours (Regular, WFH, Halfday)
     if (hours === 0 && isWeekEnd) return { pay: 0, deductions: 0, status: 'Weekend' };
     if (hours === 0) return { pay: 0, deductions: 0, status: 'Absent' };
     
@@ -1819,7 +2121,8 @@ const calculateSalaryForDay = (log, dateStr) => {
     const undertimeDeduction = calculateUndertimeMinutes(log) * settings.undertimeDeductionPerMinute;
     const totalDeductions = lateDeduction + undertimeDeduction;
     
-    const grossPay = (settings.dailySalary / 8) * hours;
+    // FIX: Apply multiplier to the worked hours (e.g., Double Pay on a worked shift)
+    const grossPay = ((settings.dailySalary / 8) * hours) * payMultiplier; 
     const pay = Math.max(0, grossPay - totalDeductions);
     
     let displayStatus = statusObj.name;
@@ -2021,25 +2324,27 @@ const renderStatusList = () => {
         const paidBadge = s.isPaid ? '<span class="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded uppercase">Paid</span>' : '<span class="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded uppercase">Unpaid</span>';
         const amBadge = s.reqAM ? '<span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">AM Log</span>' : '<span class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">No AM</span>';
         const pmBadge = s.reqPM ? '<span class="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">PM Log</span>' : '<span class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">No PM</span>';
+        
+        // FIX: The new Gold Multiplier Badge
+        const multi = s.payMultiplier || 1.0;
+        const multiplierBadge = (s.isPaid && multi !== 1.0) ? `<span class="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">${Math.round(multi * 100)}% Pay</span>` : '';
 
         return `
         <div class="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 rounded-2xl transition-all">
             
-            <!-- Order Arrows -->
             <div class="flex flex-col gap-1 shrink-0">
                 <button type="button" onclick="moveStatus(${index}, -1)" class="text-slate-400 hover:text-primary-500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
                 <button type="button" onclick="moveStatus(${index}, 1)" class="text-slate-400 hover:text-primary-500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
             </div>
 
-            <!-- Clickable Info Area -->
             <div class="flex-1 cursor-pointer" onclick="openStatusEditor(${index})">
                 <div class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">${s.name}</div>
-                <div class="flex gap-1.5 text-[9px] font-bold tracking-wider">
-                    ${paidBadge} ${amBadge} ${pmBadge}
+                <!-- Inserted the multiplier badge into the layout -->
+                <div class="flex flex-wrap gap-1.5 text-[9px] font-bold tracking-wider mt-1">
+                    ${paidBadge} ${multiplierBadge} ${amBadge} ${pmBadge}
                 </div>
             </div>
 
-            <!-- Delete Button (Hide for Regular) -->
             <div class="shrink-0">
                 ${s.id !== 'regular' ? `<button type="button" onclick="deleteStatus(${index})" class="p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>` : '<div class="w-9"></div>'}
             </div>
@@ -2065,14 +2370,16 @@ window.deleteStatus = (index) => {
 // --- NEW: Interactive Status Editor Modal ---
 window.openStatusEditor = (index = -1) => {
     const isNew = index === -1;
-    const s = isNew ? { name: '', isPaid: false, reqAM: true, reqPM: true } : settings.statuses[index];
+    // FIX: Set a default 1.0 (100%) multiplier for new statuses
+    const s = isNew ? { name: '', isPaid: false, reqAM: true, reqPM: true, payMultiplier: 1.0 } : settings.statuses[index];
+    
+    const defaultMulti = Math.round((s.payMultiplier || 1.0) * 100);
 
-    // Build the interactive form for the modal
     const html = `
         <div class="space-y-4">
             <div>
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Status Name</label>
-                <input type="text" id="modal-status-name" value="${s.name}" placeholder="e.g. WFH (Morning Only)" class="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none focus:border-primary-500">
+                <input type="text" id="modal-status-name" value="${s.name}" placeholder="e.g. Regular Holiday" class="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white text-sm outline-none focus:border-primary-500">
             </div>
             
             <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700 space-y-3">
@@ -2080,9 +2387,22 @@ window.openStatusEditor = (index = -1) => {
                 <div class="flex items-center justify-between">
                     <div class="text-sm font-semibold dark:text-white">Is this a Paid status?</div>
                     <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="modal-status-paid" class="sr-only peer" ${s.isPaid ? 'checked' : ''}>
+                        <!-- FIX: Toggling this on/off now also dims/disables the Multiplier input below it! -->
+                        <input type="checkbox" id="modal-status-paid" class="sr-only peer" ${s.isPaid ? 'checked' : ''} onchange="document.getElementById('multiplier-container').style.opacity = this.checked ? '1' : '0.4'; document.getElementById('modal-status-multiplier').disabled = !this.checked;">
                         <div class="w-11 h-6 bg-slate-200 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                     </label>
+                </div>
+                
+                <!-- FIX: NEW MULTIPLIER ROW -->
+                <div id="multiplier-container" class="flex items-center justify-between mt-3 transition-opacity duration-200 ${s.isPaid ? 'opacity-100' : 'opacity-40'}">
+                    <div>
+                        <div class="text-sm font-semibold dark:text-white">Pay Rate (%)</div>
+                        <div class="text-[10px] text-slate-500">100 = Normal, 200 = Double Pay</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="modal-status-multiplier" value="${defaultMulti}" min="0" step="10" ${s.isPaid ? '' : 'disabled'} class="w-16 p-1.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm outline-none text-right font-bold focus:border-primary-500 transition-colors">
+                        <span class="text-slate-500 dark:text-slate-400 font-bold text-sm">%</span>
+                    </div>
                 </div>
 
                 <hr class="border-slate-200 dark:border-slate-700">
@@ -2090,7 +2410,7 @@ window.openStatusEditor = (index = -1) => {
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-sm font-semibold dark:text-white">Require Morning Log</div>
-                        <div class="text-[10px] text-slate-500">User must clock in/out for AM</div>
+                        <div class="text-[10px] text-slate-500">User must clock in/out</div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="modal-status-am" class="sr-only peer" ${s.reqAM ? 'checked' : ''}>
@@ -2101,7 +2421,7 @@ window.openStatusEditor = (index = -1) => {
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="text-sm font-semibold dark:text-white">Require Afternoon Log</div>
-                        <div class="text-[10px] text-slate-500">User must clock in/out for PM</div>
+                        <div class="text-[10px] text-slate-500">User must clock in/out</div>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="modal-status-pm" class="sr-only peer" ${s.reqPM ? 'checked' : ''}>
@@ -2119,12 +2439,16 @@ window.openStatusEditor = (index = -1) => {
             return;
         }
 
+        // FIX: Extract the multiplier back into a decimal (e.g., 200 -> 2.0)
+        const multiplierValue = parseFloat(document.getElementById('modal-status-multiplier').value) / 100;
+
         const updatedStatus = {
             id: isNew ? 'custom_' + Date.now() : s.id,
             name: nameVal,
             isPaid: document.getElementById('modal-status-paid').checked,
             reqAM: document.getElementById('modal-status-am').checked,
-            reqPM: document.getElementById('modal-status-pm').checked
+            reqPM: document.getElementById('modal-status-pm').checked,
+            payMultiplier: isNaN(multiplierValue) ? 1.0 : multiplierValue // Protect against bad inputs
         };
 
         if (isNew) {
@@ -2133,12 +2457,17 @@ window.openStatusEditor = (index = -1) => {
             settings.statuses[index] = updatedStatus;
         }
         renderStatusList();
+        renderSalaryPage(); // Instantly update dashboard math if a rule changes!
     });
 };
 
 // --- PAGE: SETTINGS ---
 
 const renderSettingsPage = () => {
+
+    if (settingQuickConfirm) settingQuickConfirm.checked = settings.requireQuickLogConfirm;
+    // Hide save button on fresh load
+    if (settingsSaveBtn) settingsSaveBtn.classList.add('hidden');
     if (settingUsername) settingUsername.value = currentUsername; 
 
     // FIX: Check the toggle if the theme is dark
@@ -2158,6 +2487,7 @@ const renderSettingsPage = () => {
 const handleSettingsSave = (e) => {
     e.preventDefault();
 
+
     if (settingUsername && settingUsername.value.trim() !== '') {
         currentUsername = settingUsername.value.trim();
         localStorage.setItem(USERNAME_KEY, currentUsername);
@@ -2174,10 +2504,15 @@ const handleSettingsSave = (e) => {
     settings.morningUndertimeThreshold = settingMorningUndertime.value;
     settings.afternoonUndertimeThreshold = settingAfternoonUndertime.value;
     settings.undertimeDeductionPerMinute = parseFloat(settingUndertimeDeduction.value) || 0;
+
+    settings.requireQuickLogConfirm = settingQuickConfirm.checked;
     
     applyTheme(settings.theme); 
     saveSettings();
     showToast('Settings saved successfully');
+
+    // Hide button after saving
+    if (settingsSaveBtn) settingsSaveBtn.classList.add('hidden');
     
     renderSalaryPage();
     renderLogsTable();
@@ -2191,10 +2526,27 @@ const handleSettingsSave = (e) => {
 const NOTIF_KEY = 'dtrAppNotifications';
 let notifications = [];
 
-// 1. Core State & Persistence
+// 1. Core State & Persistence (With Auto-Cleanup)
 const loadNotifications = () => {
     const data = localStorage.getItem(NOTIF_KEY);
-    notifications = data ? JSON.parse(data) : [];
+    let loadedNotifs = data ? JSON.parse(data) : [];
+
+    // NEW: Daily Housekeeper Logic
+    const todayStr = getISODate(new Date());
+
+    notifications = loadedNotifs.filter(n => {
+        // Convert the timestamp back to your local YYYY-MM-DD format
+        const notifDateStr = getISODate(new Date(n.timestamp));
+        
+        // RULE: Keep it if it is UNREAD, OR if it was created TODAY.
+        // Destroy it if it is READ and from YESTERDAY (or older).
+        return !n.read || notifDateStr === todayStr;
+    });
+
+   // If the housekeeper deleted anything, save the newly cleaned list right away!
+    if (notifications.length !== loadedNotifs.length) {
+        saveNotifications();
+    }
 };
 
 const saveNotifications = () => {
@@ -2589,6 +2941,9 @@ const attachEventListeners = () => {
         hideModal();
     });
 
+    toggleDataViewBtn.addEventListener('click', () => switchMasterView('data'));
+    toggleAnalyticsViewBtn.addEventListener('click', () => switchMasterView('analytics'));
+
     notificationBtn.addEventListener('click', toggleNotificationPanel);
     clearNotificationsBtn.addEventListener('click', handleClearNotifications);
     closeNotificationsBtn.addEventListener('click', toggleNotificationPanel);
@@ -2616,9 +2971,21 @@ const attachEventListeners = () => {
     restoreJsonInput.addEventListener('change', handleJsonRestore);
     
     settingsForm.addEventListener('submit', handleSettingsSave);
+
+    // Unhide save button when user types or changes any setting
+    settingsForm.addEventListener('input', (e) => {
+        if (e.target.id === 'setting-theme') return; // FIX: Ignore the dark mode toggle
+        if (settingsSaveBtn) settingsSaveBtn.classList.remove('hidden');
+    });
+    settingsForm.addEventListener('change', (e) => {
+        if (e.target.id === 'setting-theme') return; // FIX: Ignore the dark mode toggle
+        if (settingsSaveBtn) settingsSaveBtn.classList.remove('hidden');
+    });
     
   // FIX: Instantly preview and auto-save theme when toggle changes
     settingTheme.addEventListener('change', (e) => {
+        e.stopPropagation(); // FIX: This stops the main form from noticing the change!
+        
         const selectedTheme = e.target.checked ? 'dark' : 'light';
         applyTheme(selectedTheme);
         
@@ -2639,12 +3006,36 @@ const init = () => {
     checkOnboarding(); 
 
     attachEventListeners();
-   // Make Avatar Clickable for Random Motivation!
+   // Make Avatar Clickable for Random Motivation (and Sleeping Interruptions!)
     if (mainDeeryImg) {
         mainDeeryImg.classList.add('cursor-pointer');
+        
+        let sleepTimer; // Prevents glitching if you spam click him
+
         mainDeeryImg.addEventListener('click', () => {
-             // Pulls a random message from the 'motivation' array in your dictionary!
-             speakDeery(getRandomDeeryMessage('motivation'), 4500);
+             // Use window.debugHour if testing, otherwise use real time
+             const currentHour = window.debugHour !== undefined ? window.debugHour : new Date().getHours();
+             
+             // Check if it's his strict sleeping hours (10:00 PM to 4:59 AM)
+             if (currentHour >= 22 || currentHour <= 4) {
+                 clearTimeout(sleepTimer);
+                 
+                 // 1. Change to the wake-up avatar
+                 mainDeeryImg.src = 'Expressions/Deery_wakeup.png';
+                 if (headerDeeryImg) headerDeeryImg.src = 'Expressions/Deery_wakeup.png';
+                 
+                 // 2. Say a random grumpy message (stays on screen for 3 seconds)
+                 speakDeery(getRandomDeeryMessage('sleepy_disturbed'), 4000);
+                 
+                 // 3. Go back to sleep after 2.5 seconds
+                 sleepTimer = setTimeout(() => {
+                     updateDeeryAvatar(); // This naturally resets him to Deery_Sleeping.png
+                 }, 4500);
+                 
+             } else {
+                 // Normal motivation during the day!
+                 speakDeery(getRandomDeeryMessage('motivation'), 4500);
+             }
         });
     }
     attachSwipeNavigation(); 
